@@ -43,6 +43,9 @@ pub enum WebullError {
     #[error("Account not found")]
     AccountNotFound,
 
+    #[error("Parse error: {0}")]
+    ParseError(String),
+
     #[error("Order not found")]
     OrderNotFound,
 

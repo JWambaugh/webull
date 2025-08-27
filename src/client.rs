@@ -451,31 +451,69 @@ impl WebullClient {
         }
     }
 
-    /// Get orders
-    pub async fn get_orders(&self, page_size: Option<i32>) -> Result<Vec<Order>> {
+    /// Get current open orders (from account data)
+    pub async fn get_orders(&self, _page_size: Option<i32>) -> Result<Vec<Order>> {
+        // Get account data which contains openOrders
+        let account_data = self.get_account_raw().await?;
+        
+        // Extract openOrders from the account data
+        if let Some(open_orders) = account_data.get("openOrders") {
+            // Parse the orders array
+            if let Ok(orders) = serde_json::from_value::<Vec<Order>>(open_orders.clone()) {
+                Ok(orders)
+            } else {
+                // If parsing fails, return empty vec
+                Ok(Vec::new())
+            }
+        } else {
+            Ok(Vec::new())
+        }
+    }
+    
+    /// Get account data as raw JSON (for extracting openOrders)
+    async fn get_account_raw(&self) -> Result<Value> {
         let account_id = self
             .account_id
             .as_ref()
             .ok_or(WebullError::AccountNotFound)?;
 
-        let page_size = page_size.unwrap_or(100);
         let headers = self.build_req_headers(false, false, true);
 
         let response = self
             .client
-            .get(&self.endpoints.orders(account_id, page_size))
+            .get(&self.endpoints.account(account_id))
             .headers(headers)
             .timeout(std::time::Duration::from_secs(self.timeout))
             .send()
             .await?;
 
-        let result: Value = response.json().await?;
+        Ok(response.json().await?)
+    }
+    
+    /// Get historical orders
+    pub async fn get_history_orders(&self, status: &str, count: i32) -> Result<Value> {
+        let account_id = self
+            .account_id
+            .as_ref()
+            .ok_or(WebullError::AccountNotFound)?;
 
-        if let Some(orders) = result.get("data") {
-            Ok(serde_json::from_value(orders.clone())?)
-        } else {
-            Ok(Vec::new())
-        }
+        let headers = self.build_req_headers(true, false, true);
+
+        let url = format!(
+            "{}{}",
+            self.endpoints.orders(account_id, count),
+            status
+        );
+
+        let response = self
+            .client
+            .get(&url)
+            .headers(headers)
+            .timeout(std::time::Duration::from_secs(self.timeout))
+            .send()
+            .await?;
+
+        Ok(response.json().await?)
     }
 
     /// Place order
@@ -614,22 +652,68 @@ impl WebullClient {
     ) -> Result<Vec<Bar>> {
         let interval = parse_interval(interval)?;
         let headers = self.build_req_headers(false, false, true);
+        
+        // Use current timestamp if not provided (like Python does)
+        let timestamp = timestamp.unwrap_or_else(|| {
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs() as i64
+        });
+
+        let url = self.endpoints.bars(ticker_id, &interval, count, Some(timestamp));
 
         let response = self
             .client
-            .get(&self.endpoints.bars(ticker_id, &interval, count, timestamp))
+            .get(&url)
             .headers(headers)
             .timeout(std::time::Duration::from_secs(self.timeout))
             .send()
             .await?;
 
         let result: Value = response.json().await?;
-
-        if let Some(data) = result.get("data") {
-            Ok(serde_json::from_value(data.clone())?)
-        } else {
-            Ok(Vec::new())
+        
+        // Parse bars from the response
+        // The response is an array with the first element containing the data
+        if let Some(result_array) = result.as_array() {
+            if let Some(first_item) = result_array.first() {
+                if let Some(data_array) = first_item.get("data").and_then(|v| v.as_array()) {
+                    let mut bars = Vec::new();
+                    for data_str in data_array {
+                        if let Some(s) = data_str.as_str() {
+                            // Parse comma-separated values: timestamp,open,close,high,low,?,volume,vwap
+                            let parts: Vec<&str> = s.split(',').collect();
+                            if parts.len() >= 7 {
+                                let timestamp = parts[0].parse::<i64>().unwrap_or(0);
+                                let open = parts[1].parse::<f64>().unwrap_or(0.0);
+                                let close = parts[2].parse::<f64>().unwrap_or(0.0);
+                                let high = parts[3].parse::<f64>().unwrap_or(0.0);
+                                let low = parts[4].parse::<f64>().unwrap_or(0.0);
+                                let volume = parts[6].parse::<i64>().unwrap_or(0);
+                                let vwap = if parts.len() > 7 && parts[7] != "null" {
+                                    parts[7].parse::<f64>().unwrap_or(0.0)
+                                } else {
+                                    0.0
+                                };
+                                
+                                bars.push(Bar {
+                                    open,
+                                    high,
+                                    low,
+                                    close,
+                                    volume,
+                                    vwap,
+                                    timestamp,
+                                });
+                            }
+                        }
+                    }
+                    return Ok(bars);
+                }
+            }
         }
+        
+        Ok(Vec::new())
     }
 
     /// Search ticker
@@ -935,37 +1019,163 @@ impl PaperWebullClient {
         Ok(response.status().is_success())
     }
 
-    /// Get paper orders
+    /// Get paper orders (current open orders)
     pub async fn get_orders(&self, page_size: Option<i32>) -> Result<Vec<Order>> {
+        // Paper trading doesn't return openOrders in account data like live trading does
+        // Instead, we need to get all orders and filter for "Working" status
+        let history = self.get_history_orders("All", page_size.unwrap_or(100)).await?;
+        
+        // Parse the response and filter for Working orders
+        if let Some(orders_array) = history.as_array() {
+            let mut working_orders = Vec::new();
+            
+            for order_val in orders_array {
+                // Check if status is "Working"
+                if let Some(status) = order_val.get("status").and_then(|s| s.as_str()) {
+                    if status == "Working" {
+                        // Try to parse this into our Order struct
+                        // For now, we'll need to manually construct it since the format is different
+                        if let Ok(order) = self.parse_paper_order(order_val) {
+                            working_orders.push(order);
+                        }
+                    }
+                }
+            }
+            Ok(working_orders)
+        } else {
+            Ok(Vec::new())
+        }
+    }
+    
+    /// Helper to parse paper order from JSON
+    fn parse_paper_order(&self, order_val: &Value) -> Result<Order> {
+        use chrono::{DateTime, Utc};
+        
+        let order_id = order_val.get("orderId")
+            .and_then(|v| v.as_i64())
+            .map(|id| id.to_string())
+            .ok_or(WebullError::ParseError("Missing orderId".to_string()))?;
+            
+        let ticker_data = order_val.get("ticker")
+            .ok_or(WebullError::ParseError("Missing ticker".to_string()))?;
+            
+        let ticker = serde_json::from_value::<Ticker>(ticker_data.clone())?;
+        
+        let action = match order_val.get("action").and_then(|v| v.as_str()) {
+            Some("BUY") => OrderAction::Buy,
+            Some("SELL") => OrderAction::Sell,
+            _ => return Err(WebullError::ParseError("Invalid action".to_string())),
+        };
+        
+        let order_type = match order_val.get("orderType").and_then(|v| v.as_str()) {
+            Some("MKT") => OrderType::Market,
+            Some("LMT") => OrderType::Limit,
+            Some("STP") => OrderType::Stop,
+            Some("STP LMT") => OrderType::StopLimit,
+            _ => return Err(WebullError::ParseError("Invalid order type".to_string())),
+        };
+        
+        let status = match order_val.get("status").and_then(|v| v.as_str()) {
+            Some("Working") => OrderStatus::Working,
+            Some("Filled") => OrderStatus::Filled,
+            Some("Canceled") | Some("Cancelled") => OrderStatus::Cancelled,
+            Some("PartiallyFilled") | Some("Partial Filled") => OrderStatus::PartialFilled,
+            Some("Pending") => OrderStatus::Pending,
+            Some("Failed") => OrderStatus::Failed,
+            _ => OrderStatus::Working,
+        };
+        
+        let time_in_force = match order_val.get("timeInForce").and_then(|v| v.as_str()) {
+            Some("DAY") => TimeInForce::Day,
+            Some("GTC") => TimeInForce::GoodTillCancel,
+            Some("IOC") => TimeInForce::ImmediateOrCancel,
+            Some("FOK") => TimeInForce::FillOrKill,
+            _ => TimeInForce::Day,
+        };
+        
+        let quantity = order_val.get("totalQuantity")
+            .and_then(|v| v.as_str())
+            .and_then(|s| s.parse::<f64>().ok())
+            .unwrap_or(0.0);
+            
+        let filled_quantity = order_val.get("filledQuantity")
+            .and_then(|v| v.as_str())
+            .and_then(|s| s.parse::<f64>().ok())
+            .unwrap_or(0.0);
+            
+        let limit_price = order_val.get("lmtPrice")
+            .and_then(|v| v.as_str())
+            .and_then(|s| s.parse::<f64>().ok());
+            
+        let stop_price = order_val.get("auxPrice")
+            .and_then(|v| v.as_str())
+            .and_then(|s| s.parse::<f64>().ok());
+            
+        let avg_fill_price = order_val.get("avgFilledPrice")
+            .and_then(|v| v.as_str())
+            .and_then(|s| s.parse::<f64>().ok());
+            
+        // Parse placed time
+        let placed_time = if let Some(timestamp) = order_val.get("createTime0").and_then(|v| v.as_i64()) {
+            DateTime::from_timestamp_millis(timestamp).unwrap_or(Utc::now())
+        } else {
+            Utc::now()
+        };
+        
+        let filled_time = if let Some(timestamp) = order_val.get("filledTime0").and_then(|v| v.as_i64()) {
+            Some(DateTime::from_timestamp_millis(timestamp).unwrap_or(Utc::now()))
+        } else {
+            None
+        };
+        
+        let outside_regular_trading_hour = order_val.get("outsideRegularTradingHour")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+            
+        Ok(Order {
+            order_id,
+            combo_id: order_val.get("comboId").and_then(|v| v.as_str()).map(String::from),
+            ticker,
+            action,
+            order_type,
+            status,
+            time_in_force,
+            quantity,
+            filled_quantity,
+            avg_fill_price,
+            limit_price,
+            stop_price,
+            placed_time,
+            filled_time,
+            outside_regular_trading_hour,
+        })
+    }
+    
+    /// Get historical paper orders
+    pub async fn get_history_orders(&self, status: &str, count: i32) -> Result<Value> {
         let paper_account_id = self
             .paper_account_id
             .as_ref()
             .ok_or(WebullError::AccountNotFound)?;
 
-        let page_size = page_size.unwrap_or(100);
-        let headers = self.base_client.build_req_headers(false, false, true);
+        let headers = self.base_client.build_req_headers(true, false, true);
+
+        let url = format!(
+            "{}{}",
+            self.base_client.endpoints.paper_orders(paper_account_id, count),
+            status
+        );
 
         let response = self
             .base_client
             .client
-            .get(
-                &self
-                    .base_client
-                    .endpoints
-                    .paper_orders(paper_account_id, page_size),
-            )
+            .get(&url)
             .headers(headers)
             .timeout(std::time::Duration::from_secs(self.base_client.timeout))
             .send()
             .await?;
 
-        let result: Value = response.json().await?;
-
-        if let Some(orders) = result.get("data") {
-            Ok(serde_json::from_value(orders.clone())?)
-        } else {
-            Ok(Vec::new())
-        }
+        Ok(response.json().await?)
     }
 
     /// Delegate other methods to base client
