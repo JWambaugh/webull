@@ -135,17 +135,21 @@ async fn display_account_info(client: &PaperWebullClient) -> Result<()> {
         Ok(account) => {
             println!("Account ID: {}", account.account_id);
             println!("Net Liquidation: ${:.2}", account.net_liquidation);
-            println!("Total Cash: ${:.2}", account.total_cash);
-            println!("Buying Power: ${:.2}", account.buying_power);
-            println!("Total Market Value: ${:.2}", account.total_market_value);
-            println!("Day P&L: ${:.2} ({:.2}%)", 
-                account.day_profit_loss, 
-                account.day_profit_loss_rate * 100.0
-            );
-            println!("Total P&L: ${:.2} ({:.2}%)", 
-                account.total_profit_loss, 
-                account.total_profit_loss_rate * 100.0
-            );
+            if let Some(total_cash) = account.total_cash {
+                println!("Total Cash: ${:.2}", total_cash);
+            }
+            if let Some(buying_power) = account.buying_power {
+                println!("Buying Power: ${:.2}", buying_power);
+            }
+            if let Some(total_market_value) = account.total_market_value {
+                println!("Total Market Value: ${:.2}", total_market_value);
+            }
+            if let (Some(day_pl), Some(day_pl_rate)) = (account.day_profit_loss, account.day_profit_loss_rate) {
+                println!("Day P&L: ${:.2} ({:.2}%)", day_pl, day_pl_rate * 100.0);
+            }
+            if let (Some(total_pl), Some(total_pl_rate)) = (account.total_profit_loss, account.total_profit_loss_rate) {
+                println!("Total P&L: ${:.2} ({:.2}%)", total_pl, total_pl_rate * 100.0);
+            }
         }
         Err(e) => {
             error!("Failed to get account details: {}", e);
@@ -175,7 +179,9 @@ async fn get_quote_interactive(client: &PaperWebullClient) -> Result<()> {
         println!("Volume: {}", quote.volume);
         println!("Day Range: ${:.2} - ${:.2}", quote.low, quote.high);
         println!("Previous Close: ${:.2}", quote.pre_close);
-        println!("Market Cap: ${:.2}M", quote.market_value / 1_000_000.0);
+        if let Some(market_value) = quote.market_value {
+            println!("Market Cap: ${:.2}M", market_value / 1_000_000.0);
+        }
     } else {
         println!("❌ Ticker {} not found", symbol);
     }
@@ -267,7 +273,7 @@ async fn place_market_order_interactive(client: &PaperWebullClient) -> Result<()
             combo_type: None,
         };
         
-        match client.place_order(&ticker.ticker_id.to_string(), &order).await {
+        match client.place_order(&order).await {
             Ok(order_id) => {
                 println!("✅ Market order placed successfully!");
                 println!("   Order ID: {}", order_id);
@@ -352,7 +358,7 @@ async fn place_limit_order_interactive(client: &PaperWebullClient) -> Result<()>
             combo_type: None,
         };
         
-        match client.place_order(&ticker.ticker_id.to_string(), &order).await {
+        match client.place_order(&order).await {
             Ok(order_id) => {
                 println!("✅ Limit order placed successfully!");
                 println!("   Order ID: {}", order_id);
@@ -422,7 +428,7 @@ async fn place_stop_order_interactive(client: &PaperWebullClient) -> Result<()> 
             combo_type: None,
         };
         
-        match client.place_order(&ticker.ticker_id.to_string(), &order).await {
+        match client.place_order(&order).await {
             Ok(order_id) => {
                 println!("✅ Stop-loss order placed successfully!");
                 println!("   Order ID: {}", order_id);
@@ -552,35 +558,45 @@ async fn analyze_portfolio(client: &PaperWebullClient) -> Result<()> {
     match client.get_account().await {
         Ok(account) => {
             let total_value = account.net_liquidation;
-            let cash_percentage = (account.total_cash / total_value) * 100.0;
-            let invested_percentage = (account.total_market_value / total_value) * 100.0;
+            let cash_percentage = account.total_cash.map(|c| (c / total_value) * 100.0).unwrap_or(0.0);
+            let invested_percentage = account.total_market_value.map(|m| (m / total_value) * 100.0).unwrap_or(0.0);
             
             println!("\nPortfolio Allocation:");
-            println!("  Cash: ${:.2} ({:.1}%)", account.total_cash, cash_percentage);
-            println!("  Invested: ${:.2} ({:.1}%)", account.total_market_value, invested_percentage);
+            if let Some(total_cash) = account.total_cash {
+                println!("  Cash: ${:.2} ({:.1}%)", total_cash, cash_percentage);
+            }
+            if let Some(total_market_value) = account.total_market_value {
+                println!("  Invested: ${:.2} ({:.1}%)", total_market_value, invested_percentage);
+            }
             
             println!("\nPerformance Metrics:");
-            println!("  Day P&L: ${:.2} ({:.2}%)", 
-                account.day_profit_loss, 
-                account.day_profit_loss_rate * 100.0
-            );
-            println!("  Total P&L: ${:.2} ({:.2}%)", 
-                account.total_profit_loss, 
-                account.total_profit_loss_rate * 100.0
-            );
+            if let (Some(day_pl), Some(day_pl_rate)) = (account.day_profit_loss, account.day_profit_loss_rate) {
+                println!("  Day P&L: ${:.2} ({:.2}%)", day_pl, day_pl_rate * 100.0);
+            }
+            if let (Some(total_pl), Some(total_pl_rate)) = (account.total_profit_loss, account.total_profit_loss_rate) {
+                println!("  Total P&L: ${:.2} ({:.2}%)", total_pl, total_pl_rate * 100.0);
+            }
             
-            if account.day_profit_loss > 0.0 {
-                println!("\n  📈 Positive day performance!");
-            } else if account.day_profit_loss < 0.0 {
-                println!("\n  📉 Negative day performance");
-            } else {
-                println!("\n  ➡️ Flat day performance");
+            if let Some(day_pl) = account.day_profit_loss {
+                if day_pl > 0.0 {
+                    println!("\n  📈 Positive day performance!");
+                } else if day_pl < 0.0 {
+                    println!("\n  📉 Negative day performance");
+                } else {
+                    println!("\n  ➡️ Flat day performance");
+                }
             }
             
             println!("\nRisk Metrics:");
-            println!("  Buying Power: ${:.2}", account.buying_power);
-            println!("  Margin Used: ${:.2}", account.margin);
-            println!("  Unsettled Cash: ${:.2}", account.unsettled_cash);
+            if let Some(buying_power) = account.buying_power {
+                println!("  Buying Power: ${:.2}", buying_power);
+            }
+            if let Some(margin) = account.margin {
+                println!("  Margin Used: ${:.2}", margin);
+            }
+            if let Some(unsettled_cash) = account.unsettled_cash {
+                println!("  Unsettled Cash: ${:.2}", unsettled_cash);
+            }
         }
         Err(e) => {
             error!("Failed to analyze portfolio: {}", e);
@@ -671,7 +687,7 @@ async fn run_automated_test_suite(client: &PaperWebullClient) -> Result<()> {
                     combo_type: None,
                 };
                 
-                match client.place_order(&ticker.ticker_id.to_string(), &order).await {
+                match client.place_order(&order).await {
                     Ok(order_id) => println!("  ✅ Test order placed! ID: {}", order_id),
                     Err(e) => println!("  ❌ Test order failed: {}", e),
                 }

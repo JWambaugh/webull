@@ -101,7 +101,7 @@ async fn main() -> webull::error::Result<()> {
     // Subscribe to order updates
     if let Some(account_id) = client.get_account_id_str() {
         println!("\nSubscribing to order updates for account: {}", account_id);
-        stream.subscribe_orders(account_id).await?;
+        stream.subscribe_orders(&account_id).await?;
     }
 
     // Keep the stream running for 60 seconds

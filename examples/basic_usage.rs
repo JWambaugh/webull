@@ -38,8 +38,12 @@ async fn main() -> Result<()> {
         Ok(account) => {
             println!("Account ID: {}", account.account_id);
             println!("Net Liquidation: ${:.2}", account.net_liquidation);
-            println!("Total Cash: ${:.2}", account.total_cash);
-            println!("Buying Power: ${:.2}", account.buying_power);
+            if let Some(total_cash) = account.total_cash {
+                println!("Total Cash: ${:.2}", total_cash);
+            }
+            if let Some(buying_power) = account.buying_power {
+                println!("Buying Power: ${:.2}", buying_power);
+            }
         }
         Err(e) => eprintln!("Failed to get account: {}", e),
     }

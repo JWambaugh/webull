@@ -30,7 +30,7 @@ pub struct ExtInfo {
 pub struct LoginResponse {
     pub access_token: String,
     pub refresh_token: String,
-    pub token_expire_time: i64,
+    pub token_expire_time: String,  // Changed from i64 to String to handle date format
     pub uuid: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub account_id: Option<String>,
@@ -65,14 +65,22 @@ pub struct Position {
 #[serde(rename_all = "camelCase")]
 pub struct Ticker {
     pub ticker_id: i64,
+    #[serde(rename = "disSymbol")]
     pub symbol: String,
     pub name: String,
+    #[serde(default)]
     pub exchange_code: String,
+    #[serde(default)]
     pub exchange_id: i32,
-    pub sec_type: String,
+    #[serde(default)]
+    pub sec_type: Vec<i32>,  // Changed to Vec<i32> to match API response
+    #[serde(default)]
     pub region_id: i32,
+    #[serde(default)]
     pub currency_id: i32,
+    #[serde(default)]
     pub currency_code: String,
+    #[serde(rename = "disExchangeCode", default)]
     pub listing_exchange: String,
 }
 
@@ -169,22 +177,74 @@ pub struct PlaceOrderRequest {
 #[serde(rename_all = "camelCase")]
 pub struct Quote {
     pub ticker_id: i64,
+    #[serde(default)]
     pub symbol: String,
+    #[serde(default)]
     pub exchange_code: String,
+    #[serde(deserialize_with = "deserialize_f64_from_string")]
     pub pre_close: f64,
+    #[serde(deserialize_with = "deserialize_f64_from_string")]
     pub open: f64,
+    #[serde(deserialize_with = "deserialize_f64_from_string")]
     pub high: f64,
+    #[serde(deserialize_with = "deserialize_f64_from_string")]
     pub low: f64,
+    #[serde(deserialize_with = "deserialize_f64_from_string")]
     pub close: f64,
+    #[serde(deserialize_with = "deserialize_i64_from_string")]
     pub volume: i64,
-    pub vwap: f64,
+    #[serde(default, deserialize_with = "deserialize_f64_from_string_opt")]
+    pub vwap: Option<f64>,
+    #[serde(deserialize_with = "deserialize_f64_from_string")]
     pub change: f64,
+    #[serde(deserialize_with = "deserialize_f64_from_string")]
     pub change_ratio: f64,
-    pub turnover_rate: f64,
-    pub vibrate_ratio: f64,
-    pub market_value: f64,
-    pub status: String,
-    pub timestamp: i64,
+    #[serde(default, deserialize_with = "deserialize_f64_from_string_opt")]
+    pub turnover_rate: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_from_string_opt")]
+    pub vibrate_ratio: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_from_string_opt")]
+    pub market_value: Option<f64>,
+    #[serde(default)]
+    pub status: Option<String>,
+    #[serde(default)]
+    pub timestamp: Option<i64>,
+}
+
+// Helper function for deserializing i64 from string
+fn deserialize_i64_from_string<'de, D>(deserializer: D) -> Result<i64, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[allow(unused_imports)]
+    use serde::de::{self, Visitor};
+    
+    struct I64Visitor;
+    
+    impl<'de> Visitor<'de> for I64Visitor {
+        type Value = i64;
+        
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("a string or number")
+        }
+        
+        fn visit_i64<E>(self, value: i64) -> Result<i64, E> {
+            Ok(value)
+        }
+        
+        fn visit_u64<E>(self, value: u64) -> Result<i64, E> {
+            Ok(value as i64)
+        }
+        
+        fn visit_str<E>(self, value: &str) -> Result<i64, E>
+        where
+            E: de::Error,
+        {
+            value.parse().map_err(E::custom)
+        }
+    }
+    
+    deserializer.deserialize_any(I64Visitor)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -320,20 +380,129 @@ pub struct Fundamental {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountDetail {
+    #[serde(deserialize_with = "deserialize_number_from_string_or_number")]
     pub account_id: String,
+    #[serde(deserialize_with = "deserialize_f64_from_string")]
     pub net_liquidation: f64,
-    pub total_cash: f64,
-    pub total_market_value: f64,
-    pub total_profit_loss: f64,
-    pub total_profit_loss_rate: f64,
-    pub day_profit_loss: f64,
-    pub day_profit_loss_rate: f64,
-    pub buying_power: f64,
-    pub cash_balance: f64,
-    pub margin: f64,
-    pub unsettled_cash: f64,
-    pub unsettled_funds: f64,
-    pub currency: String,
+    #[serde(default, deserialize_with = "deserialize_f64_from_string_opt")]
+    pub total_cash: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_from_string_opt")]
+    pub total_market_value: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_from_string_opt")]
+    pub total_profit_loss: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_from_string_opt")]
+    pub total_profit_loss_rate: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_from_string_opt")]
+    pub day_profit_loss: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_from_string_opt")]
+    pub day_profit_loss_rate: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_from_string_opt")]
+    pub buying_power: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_from_string_opt")]
+    pub cash_balance: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_from_string_opt")]
+    pub margin: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_from_string_opt")]
+    pub unsettled_cash: Option<f64>,
+    #[serde(default, deserialize_with = "deserialize_f64_from_string_opt")]
+    pub unsettled_funds: Option<f64>,
+    #[serde(default)]
+    pub currency: Option<String>,
+}
+
+// Helper functions for deserializing string numbers
+fn deserialize_f64_from_string<'de, D>(deserializer: D) -> Result<f64, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[allow(unused_imports)]
+    use serde::de::{self, Visitor};
+    
+    struct F64Visitor;
+    
+    impl<'de> Visitor<'de> for F64Visitor {
+        type Value = f64;
+        
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("a string or number")
+        }
+        
+        fn visit_f64<E>(self, value: f64) -> Result<f64, E> {
+            Ok(value)
+        }
+        
+        fn visit_str<E>(self, value: &str) -> Result<f64, E>
+        where
+            E: de::Error,
+        {
+            value.parse().map_err(E::custom)
+        }
+    }
+    
+    deserializer.deserialize_any(F64Visitor)
+}
+
+fn deserialize_f64_from_string_opt<'de, D>(deserializer: D) -> Result<Option<f64>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[allow(unused_imports)]
+    use serde::de::{self, Visitor};
+    
+    struct OptF64Visitor;
+    
+    impl<'de> Visitor<'de> for OptF64Visitor {
+        type Value = Option<f64>;
+        
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("a string or number")
+        }
+        
+        fn visit_none<E>(self) -> Result<Option<f64>, E> {
+            Ok(None)
+        }
+        
+        fn visit_some<D>(self, deserializer: D) -> Result<Option<f64>, D::Error>
+        where
+            D: serde::Deserializer<'de>,
+        {
+            deserialize_f64_from_string(deserializer).map(Some)
+        }
+    }
+    
+    deserializer.deserialize_option(OptF64Visitor)
+}
+
+fn deserialize_number_from_string_or_number<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[allow(unused_imports)]
+    use serde::de::{self, Visitor};
+    
+    struct StringOrNumberVisitor;
+    
+    impl<'de> Visitor<'de> for StringOrNumberVisitor {
+        type Value = String;
+        
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("a string or number")
+        }
+        
+        fn visit_str<E>(self, value: &str) -> Result<String, E> {
+            Ok(value.to_string())
+        }
+        
+        fn visit_i64<E>(self, value: i64) -> Result<String, E> {
+            Ok(value.to_string())
+        }
+        
+        fn visit_u64<E>(self, value: u64) -> Result<String, E> {
+            Ok(value.to_string())
+        }
+    }
+    
+    deserializer.deserialize_any(StringOrNumberVisitor)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

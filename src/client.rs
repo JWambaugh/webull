@@ -1,20 +1,23 @@
-use std::path::Path;
-use std::time::{SystemTime, UNIX_EPOCH};
-use reqwest::{Client, header::{HeaderMap, HeaderValue, CONTENT_TYPE}};
-use serde_json::{json, Value};
 use crate::{
     endpoints::Endpoints,
     error::{Result, WebullError},
     models::*,
     utils::*,
 };
+use reqwest::{
+    header::{HeaderMap, HeaderValue, CONTENT_TYPE},
+    Client,
+};
+use serde_json::{json, Value};
+use std::path::Path;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Clone)]
 pub struct WebullClient {
     client: Client,
     endpoints: Endpoints,
     headers: HeaderMap,
-    
+
     // Session data
     pub(crate) account_id: Option<String>,
     trade_token: Option<String>,
@@ -22,7 +25,7 @@ pub struct WebullClient {
     refresh_token: Option<String>,
     token_expire: Option<i64>,
     uuid: Option<String>,
-    
+
     // Configuration
     pub(crate) did: String,
     pub(crate) region_code: i32,
@@ -35,11 +38,14 @@ impl WebullClient {
     pub fn new(region_code: Option<i32>) -> Result<Self> {
         let did = get_did(None)?;
         let mut headers = HeaderMap::new();
-        
+
         headers.insert("User-Agent", HeaderValue::from_static("Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:99.0) Gecko/20100101 Firefox/99.0"));
         headers.insert("Accept", HeaderValue::from_static("*/*"));
         headers.insert("Accept-Encoding", HeaderValue::from_static("gzip, deflate"));
-        headers.insert("Accept-Language", HeaderValue::from_static("en-US,en;q=0.5"));
+        headers.insert(
+            "Accept-Language",
+            HeaderValue::from_static("en-US,en;q=0.5"),
+        );
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
         headers.insert("platform", HeaderValue::from_static("web"));
         headers.insert("hl", HeaderValue::from_static("en"));
@@ -75,7 +81,8 @@ impl WebullClient {
     pub fn set_did(&mut self, did: &str, path: Option<&Path>) -> Result<()> {
         save_did(did, path)?;
         self.did = did.to_string();
-        self.headers.insert("did", HeaderValue::from_str(did).unwrap());
+        self.headers
+            .insert("did", HeaderValue::from_str(did).unwrap());
         Ok(())
     }
 
@@ -90,23 +97,28 @@ impl WebullClient {
     }
 
     /// Build request headers
-    fn build_req_headers(&self, include_trade_token: bool, include_time: bool, include_zone_var: bool) -> HeaderMap {
+    fn build_req_headers(
+        &self,
+        include_trade_token: bool,
+        include_time: bool,
+        include_zone_var: bool,
+    ) -> HeaderMap {
         let mut headers = self.headers.clone();
         let req_id = generate_req_id();
-        
+
         headers.insert("reqid", HeaderValue::from_str(&req_id).unwrap());
         headers.insert("did", HeaderValue::from_str(&self.did).unwrap());
-        
+
         if let Some(access_token) = &self.access_token {
             headers.insert("access_token", HeaderValue::from_str(access_token).unwrap());
         }
-        
+
         if include_trade_token {
             if let Some(trade_token) = &self.trade_token {
                 headers.insert("t_token", HeaderValue::from_str(trade_token).unwrap());
             }
         }
-        
+
         if include_time {
             let timestamp = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
@@ -115,11 +127,11 @@ impl WebullClient {
                 .to_string();
             headers.insert("t_time", HeaderValue::from_str(&timestamp).unwrap());
         }
-        
+
         if include_zone_var {
             headers.insert("lzone", HeaderValue::from_str(&self.zone_var).unwrap());
         }
-        
+
         headers
     }
 
@@ -134,7 +146,9 @@ impl WebullClient {
         question_answer: Option<&str>,
     ) -> Result<LoginResponse> {
         if username.is_empty() || password.is_empty() {
-            return Err(WebullError::InvalidParameter("Username or password is empty".to_string()));
+            return Err(WebullError::InvalidParameter(
+                "Username or password is empty".to_string(),
+            ));
         }
 
         let hashed_password = hash_password(password);
@@ -162,13 +176,14 @@ impl WebullClient {
         };
 
         if let (Some(qid), Some(qanswer)) = (question_id, question_answer) {
-            data["accessQuestions"] = json!(format!("[{{\"questionId\":\"{}\", \"answer\":\"{}\"}}]", qid, qanswer));
+            data["accessQuestions"] = json!(format!(
+                "[{{\"questionId\":\"{}\", \"answer\":\"{}\"}}]",
+                qid, qanswer
+            ));
         }
 
-        println!("Login endpoint: {}", self.endpoints.login());
-        println!("Login data: {}", serde_json::to_string_pretty(&data).unwrap_or_default());
-        
-        let response = self.client
+        let response = self
+            .client
             .post(&self.endpoints.login())
             .headers(headers)
             .json(&data)
@@ -176,21 +191,33 @@ impl WebullClient {
             .send()
             .await?;
 
-        let status = response.status();
         let result: Value = response.json().await?;
-        
-        println!("Response status: {}", status);
-        println!("Response body: {}", serde_json::to_string_pretty(&result).unwrap_or_default());
-        
+
         if let Some(access_token) = result.get("accessToken").and_then(|v| v.as_str()) {
             self.access_token = Some(access_token.to_string());
-            self.refresh_token = result.get("refreshToken").and_then(|v| v.as_str()).map(|s| s.to_string());
-            self.token_expire = result.get("tokenExpireTime").and_then(|v| v.as_i64());
-            self.uuid = result.get("uuid").and_then(|v| v.as_str()).map(|s| s.to_string());
-            
+            self.refresh_token = result
+                .get("refreshToken")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            // Parse tokenExpireTime - try as i64 first, then as string date
+            self.token_expire = result.get("tokenExpireTime").and_then(|v| {
+                v.as_i64().or_else(|| {
+                    v.as_str().and_then(|s| {
+                        // Try to parse ISO 8601 date string to timestamp
+                        chrono::DateTime::parse_from_rfc3339(s)
+                            .ok()
+                            .map(|dt| dt.timestamp())
+                    })
+                })
+            });
+            self.uuid = result
+                .get("uuid")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+
             // Get account ID after successful login
             self.get_account_id().await?;
-            
+
             Ok(serde_json::from_value(result)?)
         } else {
             Err(WebullError::AuthenticationError("Login failed".to_string()))
@@ -200,14 +227,15 @@ impl WebullClient {
     /// Get MFA code
     pub async fn get_mfa(&self, username: &str) -> Result<bool> {
         let account_type = get_account_type(username)?;
-        
+
         let data = json!({
             "account": username,
             "accountType": account_type.to_string(),
             "codeType": 5
         });
 
-        let response = self.client
+        let response = self
+            .client
             .post(&self.endpoints.get_mfa())
             .headers(self.headers.clone())
             .json(&data)
@@ -221,7 +249,7 @@ impl WebullClient {
     /// Check MFA code
     pub async fn check_mfa(&self, username: &str, mfa: &str) -> Result<bool> {
         let account_type = get_account_type(username)?;
-        
+
         let data = json!({
             "account": username,
             "accountType": account_type.to_string(),
@@ -229,7 +257,8 @@ impl WebullClient {
             "codeType": 5
         });
 
-        let response = self.client
+        let response = self
+            .client
             .post(&self.endpoints.check_mfa())
             .headers(self.headers.clone())
             .json(&data)
@@ -243,8 +272,9 @@ impl WebullClient {
     /// Logout
     pub async fn logout(&mut self) -> Result<bool> {
         let headers = self.build_req_headers(false, false, true);
-        
-        let response = self.client
+
+        let response = self
+            .client
             .post(&self.endpoints.logout())
             .headers(headers)
             .timeout(std::time::Duration::from_secs(self.timeout))
@@ -266,10 +296,13 @@ impl WebullClient {
 
     /// Refresh login token
     pub async fn refresh_login(&mut self) -> Result<LoginResponse> {
-        let refresh_token = self.refresh_token.as_ref()
+        let refresh_token = self
+            .refresh_token
+            .as_ref()
             .ok_or(WebullError::SessionExpired)?;
 
-        let response = self.client
+        let response = self
+            .client
             .post(&self.endpoints.refresh_login(refresh_token))
             .headers(self.headers.clone())
             .timeout(std::time::Duration::from_secs(self.timeout))
@@ -277,12 +310,25 @@ impl WebullClient {
             .await?;
 
         let result: Value = response.json().await?;
-        
+
         if let Some(access_token) = result.get("accessToken").and_then(|v| v.as_str()) {
             self.access_token = Some(access_token.to_string());
-            self.refresh_token = result.get("refreshToken").and_then(|v| v.as_str()).map(|s| s.to_string());
-            self.token_expire = result.get("tokenExpireTime").and_then(|v| v.as_i64());
-            
+            self.refresh_token = result
+                .get("refreshToken")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            // Parse tokenExpireTime - try as i64 first, then as string date
+            self.token_expire = result.get("tokenExpireTime").and_then(|v| {
+                v.as_i64().or_else(|| {
+                    v.as_str().and_then(|s| {
+                        // Try to parse ISO 8601 date string to timestamp
+                        chrono::DateTime::parse_from_rfc3339(s)
+                            .ok()
+                            .map(|dt| dt.timestamp())
+                    })
+                })
+            });
+
             Ok(serde_json::from_value(result)?)
         } else {
             Err(WebullError::SessionExpired)
@@ -292,22 +338,17 @@ impl WebullClient {
     /// Get account ID
     pub async fn get_account_id(&mut self) -> Result<String> {
         let headers = self.build_req_headers(false, false, true);
-        
-        println!("Getting account ID from: {}", self.endpoints.account_id());
-        
-        let response = self.client
+
+        let response = self
+            .client
             .get(&self.endpoints.account_id())
             .headers(headers)
             .timeout(std::time::Duration::from_secs(self.timeout))
             .send()
             .await?;
 
-        let status = response.status();
         let result: Value = response.json().await?;
-        
-        println!("Account ID response status: {}", status);
-        println!("Account ID response: {}", serde_json::to_string_pretty(&result).unwrap_or_default());
-        
+
         if let Some(data) = result.get("data").and_then(|v| v.as_array()) {
             if let Some(first_account) = data.first() {
                 // Try to get secAccountId as either a string or number
@@ -322,21 +363,22 @@ impl WebullClient {
                 }
             }
         }
-        
+
         Err(WebullError::AccountNotFound)
     }
 
     /// Get trade token
     pub async fn get_trade_token(&mut self, password: &str) -> Result<String> {
         let hashed_password = hash_password(password);
-        
+
         let data = json!({
             "pwd": hashed_password
         });
 
         let headers = self.build_req_headers(false, false, true);
-        
-        let response = self.client
+
+        let response = self
+            .client
             .post(&self.endpoints.trade_token())
             .headers(headers)
             .json(&data)
@@ -345,23 +387,32 @@ impl WebullClient {
             .await?;
 
         let result: Value = response.json().await?;
-        
-        if let Some(trade_token) = result.get("data").and_then(|d| d.get("tradeToken")).and_then(|v| v.as_str()) {
+
+        if let Some(trade_token) = result
+            .get("data")
+            .and_then(|d| d.get("tradeToken"))
+            .and_then(|v| v.as_str())
+        {
             self.trade_token = Some(trade_token.to_string());
             Ok(trade_token.to_string())
         } else {
-            Err(WebullError::AuthenticationError("Failed to get trade token".to_string()))
+            Err(WebullError::AuthenticationError(
+                "Failed to get trade token".to_string(),
+            ))
         }
     }
 
     /// Get account details
     pub async fn get_account(&self) -> Result<AccountDetail> {
-        let account_id = self.account_id.as_ref()
+        let account_id = self
+            .account_id
+            .as_ref()
             .ok_or(WebullError::AccountNotFound)?;
 
         let headers = self.build_req_headers(false, false, true);
-        
-        let response = self.client
+
+        let response = self
+            .client
             .get(&self.endpoints.account(account_id))
             .headers(headers)
             .timeout(std::time::Duration::from_secs(self.timeout))
@@ -374,14 +425,17 @@ impl WebullClient {
 
     /// Get positions
     pub async fn get_positions(&self) -> Result<Vec<Position>> {
-        let account_id = self.account_id.as_ref()
+        let account_id = self
+            .account_id
+            .as_ref()
             .ok_or(WebullError::AccountNotFound)?;
 
         let headers = self.build_req_headers(false, false, true);
-        
+
         let url = format!("{}/v2/home/{}", self.endpoints.base_trade_url, account_id);
-        
-        let response = self.client
+
+        let response = self
+            .client
             .get(&url)
             .headers(headers)
             .timeout(std::time::Duration::from_secs(self.timeout))
@@ -389,7 +443,7 @@ impl WebullClient {
             .await?;
 
         let result: Value = response.json().await?;
-        
+
         if let Some(positions) = result.get("positions") {
             Ok(serde_json::from_value(positions.clone())?)
         } else {
@@ -399,13 +453,16 @@ impl WebullClient {
 
     /// Get orders
     pub async fn get_orders(&self, page_size: Option<i32>) -> Result<Vec<Order>> {
-        let account_id = self.account_id.as_ref()
+        let account_id = self
+            .account_id
+            .as_ref()
             .ok_or(WebullError::AccountNotFound)?;
 
         let page_size = page_size.unwrap_or(100);
         let headers = self.build_req_headers(false, false, true);
-        
-        let response = self.client
+
+        let response = self
+            .client
             .get(&self.endpoints.orders(account_id, page_size))
             .headers(headers)
             .timeout(std::time::Duration::from_secs(self.timeout))
@@ -413,7 +470,7 @@ impl WebullClient {
             .await?;
 
         let result: Value = response.json().await?;
-        
+
         if let Some(orders) = result.get("data") {
             Ok(serde_json::from_value(orders.clone())?)
         } else {
@@ -423,7 +480,9 @@ impl WebullClient {
 
     /// Place order
     pub async fn place_order(&self, order: &PlaceOrderRequest) -> Result<String> {
-        let account_id = self.account_id.as_ref()
+        let account_id = self
+            .account_id
+            .as_ref()
             .ok_or(WebullError::AccountNotFound)?;
 
         if self.trade_token.is_none() {
@@ -431,19 +490,73 @@ impl WebullClient {
         }
 
         let headers = self.build_req_headers(true, true, true);
-        
-        let response = self.client
+
+        // Create order data with proper formatting
+        let mut order_data = serde_json::to_value(order)?;
+
+        // Add required fields for live trading
+        order_data["comboType"] = json!("NORMAL");
+
+        // Add serialId if not present
+        if order_data.get("serialId").is_none() {
+            let uuid = uuid::Uuid::new_v4().to_string();
+            order_data["serialId"] = json!(uuid);
+        }
+
+        // Handle different order types
+        match order.order_type {
+            OrderType::Market => {
+                // Market orders do not support extended hours
+                order_data["outsideRegularTradingHour"] = json!(false);
+            }
+            OrderType::Limit => {
+                // Add lmtPrice for limit orders
+                if let Some(limit_price) = order.limit_price {
+                    order_data["lmtPrice"] = json!(limit_price);
+                }
+            }
+            OrderType::Stop => {
+                // Add auxPrice for stop orders
+                if let Some(stop_price) = order.stop_price {
+                    order_data["auxPrice"] = json!(stop_price);
+                }
+            }
+            OrderType::StopLimit => {
+                // Add both lmtPrice and auxPrice for stop limit orders
+                if let Some(limit_price) = order.limit_price {
+                    order_data["lmtPrice"] = json!(limit_price);
+                }
+                if let Some(stop_price) = order.stop_price {
+                    order_data["auxPrice"] = json!(stop_price);
+                }
+            }
+        }
+
+        let response = self
+            .client
             .post(&self.endpoints.place_orders(account_id))
             .headers(headers)
-            .json(order)
+            .json(&order_data)
             .timeout(std::time::Duration::from_secs(self.timeout))
             .send()
             .await?;
 
         let result: Value = response.json().await?;
-        
-        if let Some(order_id) = result.get("data").and_then(|d| d.get("orderId")).and_then(|v| v.as_str()) {
-            Ok(order_id.to_string())
+
+        // Check for orderId in data field or directly in result
+        let order_id = result
+            .get("data")
+            .and_then(|d| d.get("orderId"))
+            .or_else(|| result.get("orderId"));
+
+        if let Some(order_id_val) = order_id {
+            // Handle both string and number formats
+            let order_id_str = match order_id_val {
+                Value::String(s) => s.clone(),
+                Value::Number(n) => n.to_string(),
+                _ => return Err(WebullError::ApiError("Invalid orderId format".to_string())),
+            };
+            Ok(order_id_str)
         } else {
             Err(WebullError::ApiError("Failed to place order".to_string()))
         }
@@ -451,7 +564,9 @@ impl WebullClient {
 
     /// Cancel order
     pub async fn cancel_order(&self, order_id: &str) -> Result<bool> {
-        let account_id = self.account_id.as_ref()
+        let account_id = self
+            .account_id
+            .as_ref()
             .ok_or(WebullError::AccountNotFound)?;
 
         if self.trade_token.is_none() {
@@ -459,10 +574,11 @@ impl WebullClient {
         }
 
         let headers = self.build_req_headers(true, true, true);
-        
+
         let url = format!("{}{}", self.endpoints.cancel_order(account_id), order_id);
-        
-        let response = self.client
+
+        let response = self
+            .client
             .post(&url)
             .headers(headers)
             .timeout(std::time::Duration::from_secs(self.timeout))
@@ -475,8 +591,9 @@ impl WebullClient {
     /// Get quotes
     pub async fn get_quotes(&self, ticker_id: &str) -> Result<Quote> {
         let headers = self.build_req_headers(false, false, true);
-        
-        let response = self.client
+
+        let response = self
+            .client
             .get(&self.endpoints.quotes(ticker_id))
             .headers(headers)
             .timeout(std::time::Duration::from_secs(self.timeout))
@@ -488,11 +605,18 @@ impl WebullClient {
     }
 
     /// Get bars/candles
-    pub async fn get_bars(&self, ticker_id: &str, interval: &str, count: i32, timestamp: Option<i64>) -> Result<Vec<Bar>> {
+    pub async fn get_bars(
+        &self,
+        ticker_id: &str,
+        interval: &str,
+        count: i32,
+        timestamp: Option<i64>,
+    ) -> Result<Vec<Bar>> {
         let interval = parse_interval(interval)?;
         let headers = self.build_req_headers(false, false, true);
-        
-        let response = self.client
+
+        let response = self
+            .client
             .get(&self.endpoints.bars(ticker_id, &interval, count, timestamp))
             .headers(headers)
             .timeout(std::time::Duration::from_secs(self.timeout))
@@ -500,7 +624,7 @@ impl WebullClient {
             .await?;
 
         let result: Value = response.json().await?;
-        
+
         if let Some(data) = result.get("data") {
             Ok(serde_json::from_value(data.clone())?)
         } else {
@@ -511,8 +635,9 @@ impl WebullClient {
     /// Search ticker
     pub async fn find_ticker(&self, keyword: &str) -> Result<Vec<Ticker>> {
         let headers = self.build_req_headers(false, false, true);
-        
-        let response = self.client
+
+        let response = self
+            .client
             .get(&self.endpoints.stock_id(keyword, self.region_code))
             .headers(headers)
             .timeout(std::time::Duration::from_secs(self.timeout))
@@ -520,7 +645,9 @@ impl WebullClient {
             .await?;
 
         let result: Value = response.json().await?;
-        
+
+        // println!("Ticker search response: {}", serde_json::to_string_pretty(&result).unwrap_or_default());
+
         if let Some(data) = result.get("data") {
             Ok(serde_json::from_value(data.clone())?)
         } else {
@@ -531,8 +658,9 @@ impl WebullClient {
     /// Get option chains
     pub async fn get_options(&self, ticker: &str) -> Result<Vec<OptionContract>> {
         let headers = self.build_req_headers(false, false, true);
-        
-        let response = self.client
+
+        let response = self
+            .client
             .get(&self.endpoints.options(ticker))
             .headers(headers)
             .timeout(std::time::Duration::from_secs(self.timeout))
@@ -540,7 +668,7 @@ impl WebullClient {
             .await?;
 
         let result: Value = response.json().await?;
-        
+
         if let Some(data) = result.get("data") {
             Ok(serde_json::from_value(data.clone())?)
         } else {
@@ -551,8 +679,9 @@ impl WebullClient {
     /// Get news
     pub async fn get_news(&self, ticker: &str, last_id: i64, count: i32) -> Result<Vec<News>> {
         let headers = self.build_req_headers(false, false, true);
-        
-        let response = self.client
+
+        let response = self
+            .client
             .get(&self.endpoints.news(ticker, last_id, count))
             .headers(headers)
             .timeout(std::time::Duration::from_secs(self.timeout))
@@ -560,7 +689,7 @@ impl WebullClient {
             .await?;
 
         let result: Value = response.json().await?;
-        
+
         if let Some(data) = result.get("data") {
             Ok(serde_json::from_value(data.clone())?)
         } else {
@@ -571,8 +700,9 @@ impl WebullClient {
     /// Get fundamentals
     pub async fn get_fundamentals(&self, ticker: &str) -> Result<Fundamental> {
         let headers = self.build_req_headers(false, false, true);
-        
-        let response = self.client
+
+        let response = self
+            .client
             .get(&self.endpoints.fundamentals(ticker))
             .headers(headers)
             .timeout(std::time::Duration::from_secs(self.timeout))
@@ -586,8 +716,9 @@ impl WebullClient {
     /// Run screener
     pub async fn screener(&self, request: &ScreenerRequest) -> Result<Vec<Ticker>> {
         let headers = self.build_req_headers(false, false, true);
-        
-        let response = self.client
+
+        let response = self
+            .client
             .post(&self.endpoints.screener())
             .headers(headers)
             .json(request)
@@ -596,7 +727,7 @@ impl WebullClient {
             .await?;
 
         let result: Value = response.json().await?;
-        
+
         if let Some(data) = result.get("data") {
             Ok(serde_json::from_value(data.clone())?)
         } else {
@@ -631,7 +762,17 @@ impl PaperWebullClient {
         question_id: Option<&str>,
         question_answer: Option<&str>,
     ) -> Result<LoginResponse> {
-        let result = self.base_client.login(username, password, device_name, mfa, question_id, question_answer).await?;
+        let result = self
+            .base_client
+            .login(
+                username,
+                password,
+                device_name,
+                mfa,
+                question_id,
+                question_answer,
+            )
+            .await?;
         self.get_paper_account_id().await?;
         Ok(result)
     }
@@ -639,8 +780,10 @@ impl PaperWebullClient {
     /// Get paper account ID
     async fn get_paper_account_id(&mut self) -> Result<String> {
         let headers = self.base_client.build_req_headers(false, false, true);
-        
-        let response = self.base_client.client
+
+        let response = self
+            .base_client
+            .client
             .get(&self.base_client.endpoints.paper_account_id())
             .headers(headers)
             .timeout(std::time::Duration::from_secs(self.base_client.timeout))
@@ -648,27 +791,44 @@ impl PaperWebullClient {
             .await?;
 
         let result: Value = response.json().await?;
-        
-        if let Some(data) = result.get("data").and_then(|v| v.as_array()) {
-            if let Some(first_account) = data.first() {
-                if let Some(paper_id) = first_account.get("paperId").and_then(|v| v.as_str()) {
-                    self.paper_account_id = Some(paper_id.to_string());
-                    return Ok(paper_id.to_string());
+
+        // The response can be either an array directly or wrapped in "data"
+        let accounts = if result.is_array() {
+            result.as_array()
+        } else {
+            result.get("data").and_then(|v| v.as_array())
+        };
+
+        if let Some(accounts_array) = accounts {
+            if let Some(first_account) = accounts_array.first() {
+                // Try id as string or number (matches Python implementation)
+                if let Some(paper_id) = first_account.get("id") {
+                    let paper_id_str = match paper_id {
+                        Value::String(s) => s.clone(),
+                        Value::Number(n) => n.to_string(),
+                        _ => return Err(WebullError::AccountNotFound),
+                    };
+                    self.paper_account_id = Some(paper_id_str.clone());
+                    return Ok(paper_id_str);
                 }
             }
         }
-        
+
         Err(WebullError::AccountNotFound)
     }
 
     /// Get paper account details
     pub async fn get_account(&self) -> Result<AccountDetail> {
-        let paper_account_id = self.paper_account_id.as_ref()
+        let paper_account_id = self
+            .paper_account_id
+            .as_ref()
             .ok_or(WebullError::AccountNotFound)?;
 
         let headers = self.base_client.build_req_headers(false, false, true);
-        
-        let response = self.base_client.client
+
+        let response = self
+            .base_client
+            .client
             .get(&self.base_client.endpoints.paper_account(paper_account_id))
             .headers(headers)
             .timeout(std::time::Duration::from_secs(self.base_client.timeout))
@@ -676,42 +836,97 @@ impl PaperWebullClient {
             .await?;
 
         let result: Value = response.json().await?;
+        // println!(
+        //     "Paper account details response: {}",
+        //     serde_json::to_string_pretty(&result).unwrap_or_default()
+        // );
         Ok(serde_json::from_value(result)?)
     }
 
     /// Place paper order
-    pub async fn place_order(&self, ticker_id: &str, order: &PlaceOrderRequest) -> Result<String> {
-        let paper_account_id = self.paper_account_id.as_ref()
+    pub async fn place_order(&self, order: &PlaceOrderRequest) -> Result<String> {
+        let paper_account_id = self
+            .paper_account_id
+            .as_ref()
             .ok_or(WebullError::AccountNotFound)?;
 
-        let headers = self.base_client.build_req_headers(false, true, true);
-        
-        let response = self.base_client.client
-            .post(&self.base_client.endpoints.paper_place_order(paper_account_id, ticker_id))
+        // Paper orders need trade token and time headers
+        let headers = self.base_client.build_req_headers(true, true, true);
+
+        // Create a modified order with serialId if not present and handle market orders
+        let mut order_data = serde_json::to_value(order)?;
+
+        // Add serialId if not present
+        if order_data.get("serialId").is_none() {
+            let uuid = uuid::Uuid::new_v4().to_string();
+            order_data["serialId"] = serde_json::Value::String(uuid);
+        }
+
+        // For market orders, force outsideRegularTradingHour to false
+        if matches!(order.order_type, OrderType::Market) {
+            order_data["outsideRegularTradingHour"] = serde_json::Value::Bool(false);
+        }
+
+        // Add lmtPrice for limit orders
+        if let Some(limit_price) = order.limit_price {
+            order_data["lmtPrice"] = serde_json::Value::from(limit_price);
+        }
+
+        let response = self
+            .base_client
+            .client
+            .post(
+                &self
+                    .base_client
+                    .endpoints
+                    .paper_place_order(paper_account_id, &order.ticker_id.to_string()),
+            )
             .headers(headers)
-            .json(order)
+            .json(&order_data)
             .timeout(std::time::Duration::from_secs(self.base_client.timeout))
             .send()
             .await?;
 
         let result: Value = response.json().await?;
-        
-        if let Some(order_id) = result.get("data").and_then(|d| d.get("orderId")).and_then(|v| v.as_str()) {
-            Ok(order_id.to_string())
+
+        // Check for orderId directly in result or in data field
+        let order_id = result
+            .get("orderId")
+            .or_else(|| result.get("data").and_then(|d| d.get("orderId")));
+
+        if let Some(order_id_val) = order_id {
+            // Handle both string and number formats
+            let order_id_str = match order_id_val {
+                Value::String(s) => s.clone(),
+                Value::Number(n) => n.to_string(),
+                _ => return Err(WebullError::ApiError("Invalid orderId format".to_string())),
+            };
+            Ok(order_id_str)
         } else {
-            Err(WebullError::ApiError("Failed to place paper order".to_string()))
+            Err(WebullError::ApiError(
+                "Failed to place paper order".to_string(),
+            ))
         }
     }
 
     /// Cancel paper order
     pub async fn cancel_order(&self, order_id: &str) -> Result<bool> {
-        let paper_account_id = self.paper_account_id.as_ref()
+        let paper_account_id = self
+            .paper_account_id
+            .as_ref()
             .ok_or(WebullError::AccountNotFound)?;
 
         let headers = self.base_client.build_req_headers(false, true, true);
-        
-        let response = self.base_client.client
-            .post(&self.base_client.endpoints.paper_cancel_order(paper_account_id, order_id))
+
+        let response = self
+            .base_client
+            .client
+            .post(
+                &self
+                    .base_client
+                    .endpoints
+                    .paper_cancel_order(paper_account_id, order_id),
+            )
             .headers(headers)
             .timeout(std::time::Duration::from_secs(self.base_client.timeout))
             .send()
@@ -722,21 +937,30 @@ impl PaperWebullClient {
 
     /// Get paper orders
     pub async fn get_orders(&self, page_size: Option<i32>) -> Result<Vec<Order>> {
-        let paper_account_id = self.paper_account_id.as_ref()
+        let paper_account_id = self
+            .paper_account_id
+            .as_ref()
             .ok_or(WebullError::AccountNotFound)?;
 
         let page_size = page_size.unwrap_or(100);
         let headers = self.base_client.build_req_headers(false, false, true);
-        
-        let response = self.base_client.client
-            .get(&self.base_client.endpoints.paper_orders(paper_account_id, page_size))
+
+        let response = self
+            .base_client
+            .client
+            .get(
+                &self
+                    .base_client
+                    .endpoints
+                    .paper_orders(paper_account_id, page_size),
+            )
             .headers(headers)
             .timeout(std::time::Duration::from_secs(self.base_client.timeout))
             .send()
             .await?;
 
         let result: Value = response.json().await?;
-        
+
         if let Some(orders) = result.get("data") {
             Ok(serde_json::from_value(orders.clone())?)
         } else {
@@ -749,8 +973,16 @@ impl PaperWebullClient {
         self.base_client.get_quotes(ticker_id).await
     }
 
-    pub async fn get_bars(&self, ticker_id: &str, interval: &str, count: i32, timestamp: Option<i64>) -> Result<Vec<Bar>> {
-        self.base_client.get_bars(ticker_id, interval, count, timestamp).await
+    pub async fn get_bars(
+        &self,
+        ticker_id: &str,
+        interval: &str,
+        count: i32,
+        timestamp: Option<i64>,
+    ) -> Result<Vec<Bar>> {
+        self.base_client
+            .get_bars(ticker_id, interval, count, timestamp)
+            .await
     }
 
     pub async fn find_ticker(&self, keyword: &str) -> Result<Vec<Ticker>> {
@@ -769,22 +1001,41 @@ impl PaperWebullClient {
         self.base_client.logout().await
     }
 
+    pub async fn get_trade_token(&mut self, password: &str) -> Result<String> {
+        self.base_client.get_trade_token(password).await
+    }
+
+    pub fn get_did(&self) -> &str {
+        self.base_client.get_did()
+    }
+
+    pub fn get_account_id_str(&self) -> Option<String> {
+        self.paper_account_id.clone()
+    }
+
     pub async fn get_positions(&self) -> Result<Vec<Position>> {
         // For paper trading, we need to get positions from paper account
-        let paper_account_id = self.paper_account_id.as_ref()
+        let paper_account_id = self
+            .paper_account_id
+            .as_ref()
             .ok_or(WebullError::AccountNotFound)?;
 
         let headers = self.base_client.build_req_headers(false, false, true);
-        
-        let response = self.base_client.client
-            .get(&format!("{}/paper/1/acc/{}/positions", self.base_client.endpoints.base_paper_url, paper_account_id))
+
+        let response = self
+            .base_client
+            .client
+            .get(&format!(
+                "{}/paper/1/acc/{}/positions",
+                self.base_client.endpoints.base_paper_url, paper_account_id
+            ))
             .headers(headers)
             .timeout(std::time::Duration::from_secs(self.base_client.timeout))
             .send()
             .await?;
 
         let result: Value = response.json().await?;
-        
+
         if let Some(positions) = result.get("data") {
             Ok(serde_json::from_value(positions.clone())?)
         } else {
