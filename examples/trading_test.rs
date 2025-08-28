@@ -176,10 +176,17 @@ async fn display_account_info(client: &WebullClient) -> Result<()> {
 
     match client.get_account().await {
         Ok(account) => {
-            println!("Account ID: {}", account.account_id);
-            println!("Net Liquidation: ${:.2}", account.net_liquidation);
+            if let Some(account_id) = account.account_id {
+                println!("Account ID: {}", account_id);
+            }
+            if let Some(net_liquidation) = account.net_liquidation {
+                println!("Net Liquidation: ${:.2}", net_liquidation);
+            }
             if let Some(total_cash) = account.total_cash {
                 println!("Total Cash: ${:.2}", total_cash);
+            }
+            if let Some(cash_balance) = account.cash_balance {
+                println!("Cash Balance: ${:.2}", cash_balance);
             }
             if let Some(buying_power) = account.buying_power {
                 println!("Buying Power: ${:.2}", buying_power);
@@ -187,18 +194,13 @@ async fn display_account_info(client: &WebullClient) -> Result<()> {
             if let Some(total_market_value) = account.total_market_value {
                 println!("Total Market Value: ${:.2}", total_market_value);
             }
-            if let (Some(day_pl), Some(day_pl_rate)) =
-                (account.day_profit_loss, account.day_profit_loss_rate)
-            {
-                println!("Day P&L: ${:.2} ({:.2}%)", day_pl, day_pl_rate * 100.0);
+            if let Some(unrealized_pl) = account.unrealized_profit_loss {
+                println!("Unrealized P&L: ${:.2}", unrealized_pl);
             }
-            if let (Some(total_pl), Some(total_pl_rate)) =
-                (account.total_profit_loss, account.total_profit_loss_rate)
-            {
+            if let Some(unrealized_pl_rate) = account.unrealized_profit_loss_rate {
                 println!(
-                    "Total P&L: ${:.2} ({:.2}%)",
-                    total_pl,
-                    total_pl_rate * 100.0
+                    "Unrealized P&L Rate: {:.2}%",
+                    unrealized_pl_rate * 100.0
                 );
             }
         }
@@ -670,17 +672,35 @@ async fn analyze_portfolio(client: &WebullClient) -> Result<()> {
 
     match client.get_account().await {
         Ok(account) => {
-            let total_value = account.net_liquidation;
-            let cash_percentage = account
-                .total_cash
-                .map(|c| (c / total_value) * 100.0)
-                .unwrap_or(0.0);
-            let invested_percentage = account
-                .total_market_value
-                .map(|m| (m / total_value) * 100.0)
-                .unwrap_or(0.0);
+            // Get total value - use net_liquidation if available, otherwise try to calculate
+            let total_value = account.net_liquidation.unwrap_or_else(|| {
+                let cash = account.total_cash.unwrap_or(0.0);
+                let market_value = account.total_market_value.unwrap_or(0.0);
+                cash + market_value
+            });
+            
+            let cash_percentage = if total_value > 0.0 {
+                account
+                    .total_cash
+                    .map(|c| (c / total_value) * 100.0)
+                    .unwrap_or(0.0)
+            } else {
+                0.0
+            };
+            
+            let invested_percentage = if total_value > 0.0 {
+                account
+                    .total_market_value
+                    .map(|m| (m / total_value) * 100.0)
+                    .unwrap_or(0.0)
+            } else {
+                0.0
+            };
 
             println!("\nPortfolio Allocation:");
+            if total_value > 0.0 {
+                println!("  Total Value: ${:.2}", total_value);
+            }
             if let Some(total_cash) = account.total_cash {
                 println!("  Cash: ${:.2} ({:.1}%)", total_cash, cash_percentage);
             }
@@ -692,40 +712,26 @@ async fn analyze_portfolio(client: &WebullClient) -> Result<()> {
             }
 
             println!("\nPerformance Metrics:");
-            if let (Some(day_pl), Some(day_pl_rate)) =
-                (account.day_profit_loss, account.day_profit_loss_rate)
-            {
-                println!("  Day P&L: ${:.2} ({:.2}%)", day_pl, day_pl_rate * 100.0);
-            }
-            if let (Some(total_pl), Some(total_pl_rate)) =
-                (account.total_profit_loss, account.total_profit_loss_rate)
-            {
-                println!(
-                    "  Total P&L: ${:.2} ({:.2}%)",
-                    total_pl,
-                    total_pl_rate * 100.0
-                );
-            }
-
-            if let Some(day_pl) = account.day_profit_loss {
-                if day_pl > 0.0 {
-                    println!("\n  📈 Positive day performance!");
-                } else if day_pl < 0.0 {
-                    println!("\n  📉 Negative day performance");
+            if let Some(unrealized_pl) = account.unrealized_profit_loss {
+                println!("  Unrealized P&L: ${:.2}", unrealized_pl);
+                if unrealized_pl > 0.0 {
+                    println!("  📈 Positive performance!");
+                } else if unrealized_pl < 0.0 {
+                    println!("  📉 Negative performance");
                 } else {
-                    println!("\n  ➡️ Flat day performance");
+                    println!("  ➡️ Flat performance");
                 }
+            }
+            if let Some(unrealized_pl_rate) = account.unrealized_profit_loss_rate {
+                println!("  Unrealized P&L Rate: {:.2}%", unrealized_pl_rate * 100.0);
             }
 
             println!("\nRisk Metrics:");
             if let Some(buying_power) = account.buying_power {
                 println!("  Buying Power: ${:.2}", buying_power);
             }
-            if let Some(margin) = account.margin {
-                println!("  Margin Used: ${:.2}", margin);
-            }
-            if let Some(unsettled_cash) = account.unsettled_cash {
-                println!("  Unsettled Cash: ${:.2}", unsettled_cash);
+            if let Some(unsettled_funds) = account.unsettled_funds {
+                println!("  Unsettled Funds: ${:.2}", unsettled_funds);
             }
         }
         Err(e) => {

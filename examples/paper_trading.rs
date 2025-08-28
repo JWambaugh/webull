@@ -25,18 +25,23 @@ async fn main() -> Result<()> {
     println!("\nFetching paper account details...");
     match client.get_account().await {
         Ok(account) => {
-            println!("Paper Account ID: {}", account.account_id);
-            println!("Net Liquidation: ${:.2}", account.net_liquidation);
+            if let Some(account_id) = account.account_id {
+                println!("Paper Account ID: {}", account_id);
+            }
+            if let Some(net_liquidation) = account.net_liquidation {
+                println!("Net Liquidation: ${:.2}", net_liquidation);
+            }
             if let Some(total_cash) = account.total_cash {
                 println!("Total Cash: ${:.2}", total_cash);
+            }
+            if let Some(cash_balance) = account.cash_balance {
+                println!("Cash Balance: ${:.2}", cash_balance);
             }
             if let Some(buying_power) = account.buying_power {
                 println!("Buying Power: ${:.2}", buying_power);
             }
-            if let (Some(day_pl), Some(day_pl_rate)) =
-                (account.day_profit_loss, account.day_profit_loss_rate)
-            {
-                println!("Day P&L: ${:.2} ({:.2}%)", day_pl, day_pl_rate * 100.0);
+            if let Some(unrealized_pl) = account.unrealized_profit_loss {
+                println!("Unrealized P&L: ${:.2}", unrealized_pl);
             }
         }
         Err(e) => eprintln!("Failed to get account: {}", e),

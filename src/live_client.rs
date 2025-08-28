@@ -420,7 +420,42 @@ impl LiveWebullClient {
             .await?;
 
         let result: Value = response.json().await?;
-        Ok(serde_json::from_value(result)?)
+        
+        // Debug: Print the response to see field names
+        // eprintln!("Account response: {}", serde_json::to_string_pretty(&result).unwrap_or_default());
+        
+        let mut account: AccountDetail = serde_json::from_value(result)?;
+        
+        // Process accountMembers to extract key financial values
+        if let Some(ref members) = account.account_members {
+            for member in members {
+                match member.key.as_str() {
+                    "totalMarketValue" => {
+                        account.total_market_value = member.value.parse::<f64>().ok();
+                    }
+                    "cashBalance" => {
+                        account.cash_balance = member.value.parse::<f64>().ok();
+                    }
+                    "dayBuyingPower" | "overnightBuyingPower" => {
+                        // Use dayBuyingPower as the primary buying power
+                        if member.key == "dayBuyingPower" {
+                            account.buying_power = member.value.parse::<f64>().ok();
+                        }
+                    }
+                    "unsettledFunds" => {
+                        account.unsettled_funds = member.value.parse::<f64>().ok();
+                    }
+                    _ => {}
+                }
+            }
+            
+            // If total_cash wasn't in the members, try to use cash_balance
+            if account.total_cash.is_none() && account.cash_balance.is_some() {
+                account.total_cash = account.cash_balance;
+            }
+        }
+        
+        Ok(account)
     }
 
     /// Get positions

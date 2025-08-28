@@ -1,7 +1,7 @@
 use crate::{
     error::{Result, WebullError},
     live_client::LiveWebullClient,
-    models::*,
+    models::{AccountDetail, AccountMember, *},
 };
 use serde_json::Value;
 
@@ -105,11 +105,127 @@ impl PaperWebullClient {
             .await?;
 
         let result: Value = response.json().await?;
-        // println!(
-        //     "Paper account details response: {}",
-        //     serde_json::to_string_pretty(&result).unwrap_or_default()
-        // );
-        Ok(serde_json::from_value(result)?)
+        // Debug: Remove or comment out in production
+        // println!("Paper account raw response: {:?}", result);
+
+        // Create a new AccountDetail with paper account values
+        let mut account = AccountDetail {
+            // Paper accounts use "accountId" instead of "secAccountId"
+            account_id: result
+                .get("accountId")
+                .and_then(|v| v.as_i64())
+                .or_else(|| paper_account_id.parse::<i64>().ok()),
+            
+            // Parse netLiquidation from string
+            net_liquidation: result
+                .get("netLiquidation")
+                .and_then(|v| v.as_str())
+                .and_then(|s| s.parse::<f64>().ok())
+                .or_else(|| result.get("netLiquidation").and_then(|v| v.as_f64())),
+            
+            // Parse totalProfitLoss
+            unrealized_profit_loss: result
+                .get("totalProfitLoss")
+                .and_then(|v| v.as_str())
+                .and_then(|s| s.parse::<f64>().ok())
+                .or_else(|| result.get("totalProfitLoss").and_then(|v| v.as_f64())),
+            
+            // Parse totalProfitLossRate
+            unrealized_profit_loss_rate: result
+                .get("totalProfitLossRate")
+                .and_then(|v| v.as_str())
+                .and_then(|s| s.parse::<f64>().ok())
+                .or_else(|| result.get("totalProfitLossRate").and_then(|v| v.as_f64())),
+            
+            // Extract currency
+            currency: result.get("currency").and_then(|v| v.as_str()).map(String::from),
+            
+            // Initialize other fields as None (will be populated from accountMembers)
+            total_cost: None,
+            account_type: None,
+            broker_account_id: None,
+            pdt: None,
+            warning: None,
+            account_members: None,
+            open_orders: None,
+            positions: None,
+            total_cash: None,
+            total_market_value: None,
+            buying_power: None,
+            cash_balance: None,
+            unsettled_funds: None,
+        };
+
+        // Try to extract account members
+        if let Some(members) = result.get("accountMembers") {
+            if let Ok(parsed_members) =
+                serde_json::from_value::<Vec<AccountMember>>(members.clone())
+            {
+                account.account_members = Some(parsed_members);
+            }
+        }
+
+        // Process accountMembers to extract key financial values
+        if let Some(ref members) = account.account_members {
+            for member in members {
+                match member.key.as_str() {
+                    "totalMarketValue" => {
+                        account.total_market_value = member.value.parse::<f64>().ok();
+                    }
+                    "usableCash" => {
+                        // Paper trading uses "usableCash" instead of "cashBalance"
+                        let usable_cash = member.value.parse::<f64>().ok();
+                        account.cash_balance = usable_cash;
+                        account.buying_power = usable_cash; // Use usable cash as buying power
+                    }
+                    "dayProfitLoss" => {
+                        // We could add a day_profit_loss field if needed
+                        // For now, this is informational only
+                    }
+                    "cashBalance" => {
+                        // Fall back to cashBalance if available
+                        if account.cash_balance.is_none() {
+                            account.cash_balance = member.value.parse::<f64>().ok();
+                        }
+                    }
+                    "dayBuyingPower" | "overnightBuyingPower" => {
+                        // Use dayBuyingPower as the primary buying power if not already set
+                        if member.key == "dayBuyingPower" && account.buying_power.is_none() {
+                            account.buying_power = member.value.parse::<f64>().ok();
+                        }
+                    }
+                    "unsettledFunds" => {
+                        account.unsettled_funds = member.value.parse::<f64>().ok();
+                    }
+                    _ => {}
+                }
+            }
+
+            // If total_cash wasn't in the members, try to use cash_balance
+            if account.total_cash.is_none() && account.cash_balance.is_some() {
+                account.total_cash = account.cash_balance;
+            }
+        }
+
+        // Extract positions array - paper trading returns this directly in the response
+        if let Some(positions) = result.get("positions") {
+            if let Ok(pos_array) = serde_json::from_value::<Vec<Value>>(positions.clone()) {
+                account.positions = Some(pos_array);
+            }
+        }
+
+        // Extract openOrders array - paper trading returns this directly in the response
+        if let Some(open_orders) = result.get("openOrders") {
+            if let Ok(orders_array) = serde_json::from_value::<Vec<Value>>(open_orders.clone()) {
+                account.open_orders = Some(orders_array);
+            }
+        }
+        
+        // Set account type to CASH (paper accounts are typically cash accounts)
+        // The actual account type info is in the "accounts" array if needed
+        account.account_type = Some("CASH".to_string());
+
+        Ok(account)
     }
 
     /// Place paper order
@@ -208,12 +324,14 @@ impl PaperWebullClient {
     pub async fn get_orders(&self, page_size: Option<i32>) -> Result<Vec<Order>> {
         // Paper trading doesn't return openOrders in account data like live trading does
         // Instead, we need to get all orders and filter for "Working" status
-        let history = self.get_history_orders("All", page_size.unwrap_or(100)).await?;
-        
+        let history = self
+            .get_history_orders("All", page_size.unwrap_or(100))
+            .await?;
+
         // Parse the response and filter for Working orders
         if let Some(orders_array) = history.as_array() {
             let mut working_orders = Vec::new();
-            
+
             for order_val in orders_array {
                 // Check if status is "Working"
                 if let Some(status) = order_val.get("status").and_then(|s| s.as_str()) {
@@ -231,27 +349,29 @@ impl PaperWebullClient {
             Ok(Vec::new())
         }
     }
-    
+
     /// Helper to parse paper order from JSON
     fn parse_paper_order(&self, order_val: &Value) -> Result<Order> {
         use chrono::{DateTime, Utc};
-        
-        let order_id = order_val.get("orderId")
+
+        let order_id = order_val
+            .get("orderId")
             .and_then(|v| v.as_i64())
             .map(|id| id.to_string())
             .ok_or(WebullError::ParseError("Missing orderId".to_string()))?;
-            
-        let ticker_data = order_val.get("ticker")
+
+        let ticker_data = order_val
+            .get("ticker")
             .ok_or(WebullError::ParseError("Missing ticker".to_string()))?;
-            
+
         let ticker = serde_json::from_value::<Ticker>(ticker_data.clone())?;
-        
+
         let action = match order_val.get("action").and_then(|v| v.as_str()) {
             Some("BUY") => OrderAction::Buy,
             Some("SELL") => OrderAction::Sell,
             _ => return Err(WebullError::ParseError("Invalid action".to_string())),
         };
-        
+
         let order_type = match order_val.get("orderType").and_then(|v| v.as_str()) {
             Some("MKT") => OrderType::Market,
             Some("LMT") => OrderType::Limit,
@@ -259,7 +379,7 @@ impl PaperWebullClient {
             Some("STP LMT") => OrderType::StopLimit,
             _ => return Err(WebullError::ParseError("Invalid order type".to_string())),
         };
-        
+
         let status = match order_val.get("status").and_then(|v| v.as_str()) {
             Some("Working") => OrderStatus::Working,
             Some("Filled") => OrderStatus::Filled,
@@ -269,7 +389,7 @@ impl PaperWebullClient {
             Some("Failed") => OrderStatus::Failed,
             _ => OrderStatus::Working,
         };
-        
+
         let time_in_force = match order_val.get("timeInForce").and_then(|v| v.as_str()) {
             Some("DAY") => TimeInForce::Day,
             Some("GTC") => TimeInForce::GoodTillCancel,
@@ -277,49 +397,60 @@ impl PaperWebullClient {
             Some("FOK") => TimeInForce::FillOrKill,
             _ => TimeInForce::Day,
         };
-        
-        let quantity = order_val.get("totalQuantity")
+
+        let quantity = order_val
+            .get("totalQuantity")
             .and_then(|v| v.as_str())
             .and_then(|s| s.parse::<f64>().ok())
             .unwrap_or(0.0);
-            
-        let filled_quantity = order_val.get("filledQuantity")
+
+        let filled_quantity = order_val
+            .get("filledQuantity")
             .and_then(|v| v.as_str())
             .and_then(|s| s.parse::<f64>().ok())
             .unwrap_or(0.0);
-            
-        let limit_price = order_val.get("lmtPrice")
+
+        let limit_price = order_val
+            .get("lmtPrice")
             .and_then(|v| v.as_str())
             .and_then(|s| s.parse::<f64>().ok());
-            
-        let stop_price = order_val.get("auxPrice")
+
+        let stop_price = order_val
+            .get("auxPrice")
             .and_then(|v| v.as_str())
             .and_then(|s| s.parse::<f64>().ok());
-            
-        let avg_fill_price = order_val.get("avgFilledPrice")
+
+        let avg_fill_price = order_val
+            .get("avgFilledPrice")
             .and_then(|v| v.as_str())
             .and_then(|s| s.parse::<f64>().ok());
-            
+
         // Parse placed time
-        let placed_time = if let Some(timestamp) = order_val.get("createTime0").and_then(|v| v.as_i64()) {
-            DateTime::from_timestamp_millis(timestamp).unwrap_or(Utc::now())
-        } else {
-            Utc::now()
-        };
-        
-        let filled_time = if let Some(timestamp) = order_val.get("filledTime0").and_then(|v| v.as_i64()) {
-            Some(DateTime::from_timestamp_millis(timestamp).unwrap_or(Utc::now()))
-        } else {
-            None
-        };
-        
-        let outside_regular_trading_hour = order_val.get("outsideRegularTradingHour")
+        let placed_time =
+            if let Some(timestamp) = order_val.get("createTime0").and_then(|v| v.as_i64()) {
+                DateTime::from_timestamp_millis(timestamp).unwrap_or(Utc::now())
+            } else {
+                Utc::now()
+            };
+
+        let filled_time =
+            if let Some(timestamp) = order_val.get("filledTime0").and_then(|v| v.as_i64()) {
+                Some(DateTime::from_timestamp_millis(timestamp).unwrap_or(Utc::now()))
+            } else {
+                None
+            };
+
+        let outside_regular_trading_hour = order_val
+            .get("outsideRegularTradingHour")
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
-            
+
         Ok(Order {
             order_id,
-            combo_id: order_val.get("comboId").and_then(|v| v.as_str()).map(String::from),
+            combo_id: order_val
+                .get("comboId")
+                .and_then(|v| v.as_str())
+                .map(String::from),
             ticker,
             action,
             order_type,
@@ -335,7 +466,7 @@ impl PaperWebullClient {
             outside_regular_trading_hour,
         })
     }
-    
+
     /// Get historical paper orders
     pub async fn get_history_orders(&self, status: &str, count: i32) -> Result<Value> {
         let paper_account_id = self
@@ -347,7 +478,9 @@ impl PaperWebullClient {
 
         let url = format!(
             "{}{}",
-            self.base_client.endpoints.paper_orders(paper_account_id, count),
+            self.base_client
+                .endpoints
+                .paper_orders(paper_account_id, count),
             status
         );
 

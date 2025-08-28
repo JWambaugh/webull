@@ -36,8 +36,12 @@ async fn main() -> Result<()> {
     println!("\nFetching account details...");
     match client.get_account().await {
         Ok(account) => {
-            println!("Account ID: {}", account.account_id);
-            println!("Net Liquidation: ${:.2}", account.net_liquidation);
+            if let Some(account_id) = account.account_id {
+                println!("Account ID: {}", account_id);
+            }
+            if let Some(net_liquidation) = account.net_liquidation {
+                println!("Net Liquidation: ${:.2}", net_liquidation);
+            }
             if let Some(total_cash) = account.total_cash {
                 println!("Total Cash: ${:.2}", total_cash);
             }

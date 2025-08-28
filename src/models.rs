@@ -380,34 +380,51 @@ pub struct Fundamental {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountDetail {
-    #[serde(deserialize_with = "deserialize_number_from_string_or_number")]
-    pub account_id: String,
-    #[serde(deserialize_with = "deserialize_f64_from_string")]
-    pub net_liquidation: f64,
+    #[serde(rename = "secAccountId", default)]
+    pub account_id: Option<i64>,
     #[serde(default, deserialize_with = "deserialize_f64_from_string_opt")]
-    pub total_cash: Option<f64>,
-    #[serde(default, deserialize_with = "deserialize_f64_from_string_opt")]
-    pub total_market_value: Option<f64>,
-    #[serde(default, deserialize_with = "deserialize_f64_from_string_opt")]
-    pub total_profit_loss: Option<f64>,
-    #[serde(default, deserialize_with = "deserialize_f64_from_string_opt")]
-    pub total_profit_loss_rate: Option<f64>,
-    #[serde(default, deserialize_with = "deserialize_f64_from_string_opt")]
-    pub day_profit_loss: Option<f64>,
-    #[serde(default, deserialize_with = "deserialize_f64_from_string_opt")]
-    pub day_profit_loss_rate: Option<f64>,
-    #[serde(default, deserialize_with = "deserialize_f64_from_string_opt")]
-    pub buying_power: Option<f64>,
-    #[serde(default, deserialize_with = "deserialize_f64_from_string_opt")]
-    pub cash_balance: Option<f64>,
-    #[serde(default, deserialize_with = "deserialize_f64_from_string_opt")]
-    pub margin: Option<f64>,
-    #[serde(default, deserialize_with = "deserialize_f64_from_string_opt")]
-    pub unsettled_cash: Option<f64>,
-    #[serde(default, deserialize_with = "deserialize_f64_from_string_opt")]
-    pub unsettled_funds: Option<f64>,
+    pub net_liquidation: Option<f64>,
+    #[serde(rename = "totalCost", default, deserialize_with = "deserialize_f64_from_string_opt")]
+    pub total_cost: Option<f64>,
+    #[serde(rename = "unrealizedProfitLoss", default, deserialize_with = "deserialize_f64_from_string_opt")]
+    pub unrealized_profit_loss: Option<f64>,
+    #[serde(rename = "unrealizedProfitLossRate", default, deserialize_with = "deserialize_f64_from_string_opt")]
+    pub unrealized_profit_loss_rate: Option<f64>,
+    #[serde(default)]
+    pub account_type: Option<String>,
     #[serde(default)]
     pub currency: Option<String>,
+    #[serde(rename = "brokerAccountId", default)]
+    pub broker_account_id: Option<String>,
+    #[serde(default)]
+    pub pdt: Option<bool>,
+    #[serde(default)]
+    pub warning: Option<bool>,
+    #[serde(default)]
+    pub account_members: Option<Vec<AccountMember>>,
+    #[serde(rename = "openOrders", default)]
+    pub open_orders: Option<Vec<serde_json::Value>>,
+    #[serde(default)]
+    pub positions: Option<Vec<serde_json::Value>>,
+    // Computed fields from accountMembers (populated in post-processing)
+    #[serde(skip)]
+    pub total_cash: Option<f64>,
+    #[serde(skip)]
+    pub total_market_value: Option<f64>,
+    #[serde(skip)]
+    pub buying_power: Option<f64>,
+    #[serde(skip)]
+    pub cash_balance: Option<f64>,
+    #[serde(skip)]
+    pub unsettled_funds: Option<f64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccountMember {
+    pub key: String,
+    pub value: String,
+    #[serde(default)]
+    pub data: Option<serde_json::Value>,
 }
 
 // Helper functions for deserializing string numbers
@@ -473,37 +490,6 @@ where
     deserializer.deserialize_option(OptF64Visitor)
 }
 
-fn deserialize_number_from_string_or_number<'de, D>(deserializer: D) -> Result<String, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    #[allow(unused_imports)]
-    use serde::de::{self, Visitor};
-    
-    struct StringOrNumberVisitor;
-    
-    impl<'de> Visitor<'de> for StringOrNumberVisitor {
-        type Value = String;
-        
-        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-            formatter.write_str("a string or number")
-        }
-        
-        fn visit_str<E>(self, value: &str) -> Result<String, E> {
-            Ok(value.to_string())
-        }
-        
-        fn visit_i64<E>(self, value: i64) -> Result<String, E> {
-            Ok(value.to_string())
-        }
-        
-        fn visit_u64<E>(self, value: u64) -> Result<String, E> {
-            Ok(value.to_string())
-        }
-    }
-    
-    deserializer.deserialize_any(StringOrNumberVisitor)
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
