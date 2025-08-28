@@ -126,17 +126,24 @@ The unified `WebullClient` enum automatically delegates method calls to the appr
 ## Streaming Example
 
 ```rust
-use webull::{StreamConn, stream::TopicTypes};
+use webull::{StreamConn, stream::{StreamConfig, TopicTypes}};
 
-let mut stream = StreamConn::new(None);
+// Create streaming connection
+let config = StreamConfig {
+    debug: true,  // Enable debug logging
+    ..Default::default()
+};
+let mut stream = StreamConn::new(Some(config));
 
 // Set callbacks
 stream.set_price_callback(|topic, data| {
     println!("Price update: {:?}", data);
 });
 
-// Connect and subscribe
+// Connect using access token and device ID from login
 stream.connect(&access_token, &device_id).await?;
+
+// Subscribe to ticker updates
 stream.subscribe_ticker("913256135", TopicTypes::basic()).await?;
 ```
 
@@ -200,11 +207,14 @@ Paper trading does **NOT** require a trade token - you can place orders immediat
 // Get open orders
 let orders = client.get_orders(None).await?;
 for order in orders {
-    println!("Order {}: {} {} shares of {} at ${:.2}",
+    let symbol = order.ticker.as_ref()
+        .map(|t| t.symbol.as_str())
+        .unwrap_or("Unknown");
+    println!("Order {}: {:?} {} shares of {} at ${:.2}",
         order.order_id,
         order.action,
         order.quantity,
-        order.ticker.symbol,
+        symbol,
         order.limit_price.unwrap_or(0.0)
     );
 }
