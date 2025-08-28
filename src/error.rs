@@ -58,6 +58,9 @@ pub enum WebullError {
     #[error("Symbol not found: {0}")]
     SymbolNotFound(String),
 
+    #[error("Ticker not found: {0}")]
+    TickerNotFound(String),
+
     #[error("WebSocket error: {0}")]
     WebSocketError(String),
 

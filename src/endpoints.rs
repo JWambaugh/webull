@@ -221,7 +221,7 @@ impl Endpoints {
 
     pub fn orders(&self, account_id: &str, page_size: i32) -> String {
         format!(
-            "{}/trade/v2/option/list?secAccountId={}&startTime=1970-0-1&dateType=ORDER&pageSize={}&status=",
+            "{}/trade/v2/option/list?secAccountId={}&startTime=1970-01-01&dateType=ORDER&pageSize={}&status=",
             self.base_ustradebroker_url, account_id, page_size
         )
     }
@@ -232,7 +232,7 @@ impl Endpoints {
 
     pub fn paper_orders(&self, paper_account_id: &str, page_size: i32) -> String {
         format!(
-            "{}/paper/1/acc/{}/order?&startTime=1970-0-1&dateType=ORDER&pageSize={}&status=",
+            "{}/paper/1/acc/{}/order?&startTime=1970-01-01&dateType=ORDER&pageSize={}&status=",
             self.base_paper_url, paper_account_id, page_size
         )
     }

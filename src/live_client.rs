@@ -11,11 +11,12 @@ use reqwest::{
 use serde_json::{json, Value};
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
+use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub struct LiveWebullClient {
-    pub(crate) client: Client,
-    pub(crate) endpoints: Endpoints,
+    pub client: Client,
+    pub endpoints: Endpoints,
     pub(crate) headers: HeaderMap,
 
     // Session data
@@ -97,7 +98,7 @@ impl LiveWebullClient {
     }
 
     /// Build request headers
-    pub(crate) fn build_req_headers(
+    pub fn build_req_headers(
         &self,
         include_trade_token: bool,
         include_time: bool,
@@ -484,7 +485,8 @@ impl LiveWebullClient {
 
         let headers = self.build_req_headers(false, false, true);
 
-        let url = format!("{}/v2/home/{}", self.endpoints.base_trade_url, account_id);
+        // Use the same endpoint as get_account which includes positions
+        let url = self.endpoints.account(account_id);
 
         let response = self
             .client
@@ -497,7 +499,14 @@ impl LiveWebullClient {
         let result: Value = response.json().await?;
 
         if let Some(positions) = result.get("positions") {
-            Ok(serde_json::from_value(positions.clone())?)
+            match serde_json::from_value::<Vec<Position>>(positions.clone()) {
+                Ok(parsed) => Ok(parsed),
+                Err(e) => {
+                    eprintln!("Failed to parse positions: {}", e);
+                    eprintln!("Raw positions: {}", serde_json::to_string_pretty(positions).unwrap_or_default());
+                    Ok(Vec::new())
+                }
+            }
         } else {
             Ok(Vec::new())
         }
@@ -510,11 +519,32 @@ impl LiveWebullClient {
         
         // Extract openOrders from the account data
         if let Some(open_orders) = account_data.get("openOrders") {
-            // Parse the orders array
-            if let Ok(orders) = serde_json::from_value::<Vec<Order>>(open_orders.clone()) {
-                Ok(orders)
+            // Live API has both status and statusCode fields, we need to handle this
+            if let Some(orders_array) = open_orders.as_array() {
+                let mut parsed_orders = Vec::new();
+                
+                for order_value in orders_array {
+                    // Clone and modify the order value to fix field conflicts
+                    let mut order = order_value.clone();
+                    
+                    // Use statusCode if present, otherwise use status
+                    if order.get("statusCode").is_some() {
+                        if let Some(obj) = order.as_object_mut() {
+                            obj.remove("status");  // Remove the conflicting status field
+                        }
+                    }
+                    
+                    // Try to parse the modified order
+                    match serde_json::from_value::<Order>(order) {
+                        Ok(parsed) => parsed_orders.push(parsed),
+                        Err(e) => {
+                            eprintln!("Failed to parse order: {}", e);
+                        }
+                    }
+                }
+                
+                Ok(parsed_orders)
             } else {
-                // If parsing fails, return empty vec
                 Ok(Vec::new())
             }
         } else {
@@ -665,17 +695,38 @@ impl LiveWebullClient {
 
         let headers = self.build_req_headers(true, true, true);
 
-        let url = format!("{}{}", self.endpoints.cancel_order(account_id), order_id);
-
+        // Python adds order_id and a UUID to the cancel URL
+        let uuid = Uuid::new_v4();
+        let url = format!("{}{}/{}", self.endpoints.cancel_order(account_id), order_id, uuid);
+        
+        let data = json!({});
         let response = self
             .client
             .post(&url)
             .headers(headers)
+            .json(&data)
             .timeout(std::time::Duration::from_secs(self.timeout))
             .send()
             .await?;
 
-        Ok(response.status().is_success())
+        // Check the response for success field
+        if response.status().is_success() {
+            let result: Value = response.json().await?;
+            
+            // The API returns code "200" for success but success field is false
+            // Check for code field first
+            if let Some(code) = result.get("code").and_then(|v| v.as_str()) {
+                if code == "200" {
+                    return Ok(true);
+                }
+            }
+            
+            // Fallback to checking success field
+            if let Some(success) = result.get("success").and_then(|v| v.as_bool()) {
+                return Ok(success);
+            }
+        }
+        Ok(false)
     }
 
     /// Get quotes
@@ -753,7 +804,7 @@ impl LiveWebullClient {
                                     high,
                                     low,
                                     close,
-                                    volume,
+                                    volume: volume as f64,
                                     vwap,
                                     timestamp,
                                 });
@@ -812,25 +863,59 @@ impl LiveWebullClient {
         }
     }
 
+    /// Get ticker information including ticker ID
+    pub async fn get_ticker(&self, symbol: &str) -> Result<String> {
+        let headers = self.build_req_headers(false, false, true);
+        
+        // Use stock_id endpoint with region 6 (US)
+        let response = self
+            .client
+            .get(&self.endpoints.stock_id(symbol, 6))
+            .headers(headers)
+            .timeout(std::time::Duration::from_secs(self.timeout))
+            .send()
+            .await?;
+        
+        let result: Value = response.json().await?;
+        
+        if let Some(data) = result.get("data").and_then(|v| v.as_array()) {
+            // Find the ticker matching the symbol
+            for ticker in data {
+                if ticker.get("disSymbol").and_then(|v| v.as_str()) == Some(symbol) || 
+                   ticker.get("symbol").and_then(|v| v.as_str()) == Some(symbol) {
+                    if let Some(ticker_id) = ticker.get("tickerId") {
+                        // Handle both string and number ticker IDs
+                        let ticker_id_str = match ticker_id {
+                            Value::String(s) => s.clone(),
+                            Value::Number(n) => n.to_string(),
+                            _ => continue,
+                        };
+                        return Ok(ticker_id_str);
+                    }
+                }
+            }
+        }
+        
+        Err(WebullError::TickerNotFound(symbol.to_string()))
+    }
+
     /// Get news
-    pub async fn get_news(&self, ticker: &str, last_id: i64, count: i32) -> Result<Vec<News>> {
+    pub async fn get_news(&self, symbol: &str, last_id: i64, count: i32) -> Result<Vec<News>> {
+        // First get the ticker ID
+        let ticker_id = self.get_ticker(symbol).await?;
+        
         let headers = self.build_req_headers(false, false, true);
 
         let response = self
             .client
-            .get(&self.endpoints.news(ticker, last_id, count))
+            .get(&self.endpoints.news(&ticker_id, last_id, count))
             .headers(headers)
             .timeout(std::time::Duration::from_secs(self.timeout))
             .send()
             .await?;
 
-        let result: Value = response.json().await?;
-
-        if let Some(data) = result.get("data") {
-            Ok(serde_json::from_value(data.clone())?)
-        } else {
-            Ok(Vec::new())
-        }
+        let result: Vec<News> = response.json().await?;
+        Ok(result)
     }
 
     /// Get fundamentals

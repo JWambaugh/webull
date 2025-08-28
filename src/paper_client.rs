@@ -114,7 +114,8 @@ impl PaperWebullClient {
             account_id: result
                 .get("accountId")
                 .and_then(|v| v.as_i64())
-                .or_else(|| paper_account_id.parse::<i64>().ok()),
+                .map(|id| id.to_string())
+                .or_else(|| Some(paper_account_id.to_string())),
             
             // Parse netLiquidation from string
             net_liquidation: result
@@ -144,15 +145,27 @@ impl PaperWebullClient {
             total_cost: None,
             account_type: None,
             broker_account_id: None,
+            broker_id: None,
+            currency_id: None,
+            unrealized_profit_loss_base: None,
             pdt: None,
+            professional: None,
             warning: None,
+            remind_modify_pwd: None,
+            show_upgrade: None,
+            open_order_size: None,
             account_members: None,
             open_orders: None,
+            open_orders2: None,
+            open_ipo_orders: None,
             positions: None,
+            positions2: None,
+            banners: None,
             total_cash: None,
             total_market_value: None,
             buying_power: None,
             cash_balance: None,
+            settled_funds: None,
             unsettled_funds: None,
         };
 
@@ -209,14 +222,14 @@ impl PaperWebullClient {
 
         // Extract positions array - paper trading returns this directly in the response
         if let Some(positions) = result.get("positions") {
-            if let Ok(pos_array) = serde_json::from_value::<Vec<Value>>(positions.clone()) {
+            if let Ok(pos_array) = serde_json::from_value::<Vec<Position>>(positions.clone()) {
                 account.positions = Some(pos_array);
             }
         }
 
         // Extract openOrders array - paper trading returns this directly in the response
         if let Some(open_orders) = result.get("openOrders") {
-            if let Ok(orders_array) = serde_json::from_value::<Vec<Value>>(open_orders.clone()) {
+            if let Ok(orders_array) = serde_json::from_value::<Vec<Order>>(open_orders.clone()) {
                 account.open_orders = Some(orders_array);
             }
         }
@@ -451,7 +464,7 @@ impl PaperWebullClient {
                 .get("comboId")
                 .and_then(|v| v.as_str())
                 .map(String::from),
-            ticker,
+            ticker: Some(ticker),
             action,
             order_type,
             status,
@@ -461,8 +474,9 @@ impl PaperWebullClient {
             avg_fill_price,
             limit_price,
             stop_price,
-            placed_time,
-            filled_time,
+            create_time: None,
+            placed_time: Some(placed_time.to_rfc3339()),
+            filled_time: filled_time.map(|t| t.to_rfc3339()),
             outside_regular_trading_hour,
         })
     }
@@ -542,32 +556,11 @@ impl PaperWebullClient {
     }
 
     pub async fn get_positions(&self) -> Result<Vec<Position>> {
-        // For paper trading, we need to get positions from paper account
-        let paper_account_id = self
-            .paper_account_id
-            .as_ref()
-            .ok_or(WebullError::AccountNotFound)?;
-
-        let headers = self.base_client.build_req_headers(false, false, true);
-
-        let response = self
-            .base_client
-            .client
-            .get(&format!(
-                "{}/paper/1/acc/{}/positions",
-                self.base_client.endpoints.base_paper_url, paper_account_id
-            ))
-            .headers(headers)
-            .timeout(std::time::Duration::from_secs(self.base_client.timeout))
-            .send()
-            .await?;
-
-        let result: Value = response.json().await?;
-
-        if let Some(positions) = result.get("data") {
-            Ok(serde_json::from_value(positions.clone())?)
-        } else {
-            Ok(Vec::new())
-        }
+        // For paper trading, positions are included in the account details
+        // This matches the Python implementation which calls get_account()['positions']
+        let account = self.get_account().await?;
+        
+        // Return positions from account details, defaulting to empty vec if None
+        Ok(account.positions.unwrap_or_default())
     }
 }
