@@ -1,4 +1,7 @@
 pub mod client;
+pub mod live_client;
+pub mod paper_client;
+pub mod unified_client;
 pub mod endpoints;
 pub mod stream;
 pub mod error;

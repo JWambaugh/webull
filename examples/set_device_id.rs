@@ -1,4 +1,4 @@
-use webull::{WebullClient, error::Result, utils::save_did};
+use webull::{LiveWebullClient, error::Result, utils::save_did};
 use std::path::Path;
 use std::io::{self, Write};
 
@@ -10,9 +10,9 @@ fn main() -> Result<()> {
     println!("This program helps you set and save a device ID for Webull API access.\n");
     println!("Device IDs are used to identify your client to Webull's servers.\n");
     
-    // Create a client (both Live and Paper clients use the same device ID mechanism)
-    // Using WebullClient here since device ID management is the same for both live and paper trading
-    let mut client = WebullClient::new(Some(6))?;
+    // Create a live client (device ID management is directly on LiveWebullClient)
+    // Both Live and Paper clients use the same device ID mechanism through the base client
+    let mut client = LiveWebullClient::new(Some(6))?;
     
     // Display current device ID
     println!("Current Device ID: {}", client.get_did());
@@ -67,7 +67,7 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn display_current_did(client: &WebullClient) {
+fn display_current_did(client: &LiveWebullClient) {
     println!("\n📋 Current Device ID Information");
     println!("────────────────────────────────");
     let did = client.get_did();
@@ -80,7 +80,7 @@ fn display_current_did(client: &WebullClient) {
     }
 }
 
-fn generate_and_set_did(client: &mut WebullClient) -> Result<()> {
+fn generate_and_set_did(client: &mut LiveWebullClient) -> Result<()> {
     println!("\n🎲 Generating New Device ID");
     println!("────────────────────────────");
     
@@ -129,7 +129,7 @@ fn generate_and_set_did(client: &mut WebullClient) -> Result<()> {
     Ok(())
 }
 
-fn set_custom_did(client: &mut WebullClient) -> Result<()> {
+fn set_custom_did(client: &mut LiveWebullClient) -> Result<()> {
     println!("\n✏️  Set Custom Device ID");
     println!("────────────────────────");
     println!("Enter your custom device ID:\n");
@@ -160,7 +160,7 @@ fn set_custom_did(client: &mut WebullClient) -> Result<()> {
     Ok(())
 }
 
-fn save_current_did(client: &WebullClient) -> Result<()> {
+fn save_current_did(client: &LiveWebullClient) -> Result<()> {
     println!("\n💾 Save Current Device ID");
     println!("─────────────────────────");
     
@@ -182,7 +182,7 @@ fn save_current_did(client: &WebullClient) -> Result<()> {
     Ok(())
 }
 
-fn load_did_from_file(client: &mut WebullClient) -> Result<()> {
+fn load_did_from_file(client: &mut LiveWebullClient) -> Result<()> {
     println!("\n📂 Load Device ID from File");
     println!("───────────────────────────");
     

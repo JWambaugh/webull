@@ -3,7 +3,7 @@ mod tests {
     use crate::error::WebullError;
     use crate::models::*;
     use crate::utils::*;
-    use crate::{PaperWebullClient, WebullClient};
+    use crate::WebullClient;
     use std::collections::HashMap;
 
     #[test]
@@ -110,15 +110,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_client_creation() {
-        let client = WebullClient::new(Some(6));
+    async fn test_live_client_creation() {
+        let client = WebullClient::new_live(Some(6));
         assert!(client.is_ok());
         // Region code is tested internally in the client
     }
 
     #[tokio::test]
     async fn test_paper_client_creation() {
-        let client = PaperWebullClient::new(Some(6));
+        let client = WebullClient::new_paper(Some(6));
         assert!(client.is_ok());
     }
 
