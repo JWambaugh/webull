@@ -27,7 +27,7 @@ pub struct StreamConfig {
 impl Default for StreamConfig {
     fn default() -> Self {
         Self {
-            host: "wss://wspush.webullfintech.com:443/mqtt".to_string(),
+            host: "wss://wspush.webullbroker.com/mqtt".to_string(),  // Full WebSocket URL with path
             port: 443,
             use_ssl: true,
             client_id: format!("rust_client_{}", uuid::Uuid::new_v4()),
@@ -81,15 +81,19 @@ impl StreamConn {
     /// Connect to the streaming service
     pub async fn connect(&mut self, access_token: &str, did: &str) -> Result<()> {
         let mut mqtt_options = MqttOptions::new(
-            &self.config.client_id,
+            did,  // Use did as client_id like Python does
             &self.config.host,
             self.config.port,
         );
 
         mqtt_options.set_keep_alive(self.config.keep_alive);
         
-        // Set authentication
-        mqtt_options.set_credentials(access_token, did);
+        // Set authentication - Python uses hardcoded test/test
+        mqtt_options.set_credentials("test", "test");
+        
+        // Enable WebSocket transport with TLS like Python uses
+        use rumqttc::Transport;
+        mqtt_options.set_transport(Transport::Wss(Default::default()));
 
         // Create MQTT client
         let (client, mut eventloop) = AsyncClient::new(mqtt_options, 10);
@@ -149,6 +153,36 @@ impl StreamConn {
         }
 
         if *self.is_connected.read() {
+            // Send initial hello message like Python does
+            let hello_msg = if !access_token.is_empty() {
+                serde_json::json!({
+                    "header": {
+                        "did": did,
+                        "hl": "en",
+                        "app": "desktop",
+                        "os": "web",
+                        "osType": "windows",
+                        "accessToken": access_token
+                    }
+                })
+            } else {
+                serde_json::json!({
+                    "header": {
+                        "did": did,
+                        "hl": "en",
+                        "app": "desktop",
+                        "os": "web",
+                        "osType": "windows"
+                    }
+                })
+            };
+            
+            // Subscribe to the hello message
+            if let Some(ref client) = self.client {
+                client.subscribe(hello_msg.to_string(), QoS::AtMostOnce).await
+                    .map_err(|e| WebullError::MqttError(format!("Failed to send hello: {}", e)))?;
+            }
+            
             Ok(())
         } else {
             Err(WebullError::WebSocketError("Failed to connect to streaming service".to_string()))
