@@ -59,9 +59,10 @@ async fn main() -> Result<()> {
         let quote = client.get_quotes(&ticker.ticker_id.to_string()).await?;
         println!("AAPL price: ${}", quote.close);
         
-        // Place order (requires trade token for live trading)
+        // IMPORTANT: Live trading requires a trade token before placing orders
+        // Paper trading does NOT require a trade token
         if !client.is_paper() {
-            client.get_trade_token("password").await?;
+            client.get_trade_token("your_trading_pin").await?;  // 6-digit PIN
         }
         
         let order = PlaceOrderRequest {
@@ -94,9 +95,13 @@ use webull::{LiveWebullClient, PaperWebullClient, models::*, error::Result};
 
 // For live trading
 let mut live_client = LiveWebullClient::new(Some(6))?;
+live_client.login("email", "password", None, None, None, None).await?;
+live_client.get_trade_token("123456").await?;  // Your 6-digit trading PIN - Required for placing orders!
 
-// For paper trading
+// For paper trading  
 let mut paper_client = PaperWebullClient::new(Some(6))?;
+paper_client.login("email", "password", None, None, None, None).await?;
+// No trade token needed for paper trading
 ```
 
 ## Architecture
@@ -133,7 +138,7 @@ Create a `.env` file:
 ```env
 WEBULL_USERNAME=your_email@example.com
 WEBULL_PASSWORD=your_password
-WEBULL_TRADE_PASSWORD=your_trade_password
+WEBULL_TRADING_PIN=123456  # Your 6-digit trading PIN
 ```
 
 ## Examples
@@ -159,6 +164,23 @@ cargo run --example trading_test
 # Paper trading only
 cargo run --example paper_trading
 ```
+
+## Important: Live Trading Requirements
+
+### Trade Token
+**Live trading requires obtaining a trade token before placing any orders.** This is a security measure that requires your 6-digit trading PIN (NOT your login password).
+
+```rust
+// For live trading, get trade token after login
+if !client.is_paper() {
+    client.get_trade_token("123456").await?;  // Your 6-digit trading PIN
+}
+
+// Now you can place orders
+let order_id = client.place_order(&order).await?;
+```
+
+Paper trading does **NOT** require a trade token - you can place orders immediately after login.
 
 ## Working with Orders
 

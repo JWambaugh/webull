@@ -387,18 +387,35 @@ impl LiveWebullClient {
             .await?;
 
         let result: Value = response.json().await?;
+        
+        // Debug: print response to understand the structure
+        // eprintln!("Trade token response: {}", serde_json::to_string_pretty(&result).unwrap_or_default());
 
-        if let Some(trade_token) = result
-            .get("data")
-            .and_then(|d| d.get("tradeToken"))
+        // Try to get trade token directly from response first, then from data field
+        let trade_token = result
+            .get("tradeToken")
             .and_then(|v| v.as_str())
-        {
-            self.trade_token = Some(trade_token.to_string());
-            Ok(trade_token.to_string())
+            .or_else(|| {
+                result
+                    .get("data")
+                    .and_then(|d| d.get("tradeToken"))
+                    .and_then(|v| v.as_str())
+            });
+
+        if let Some(token) = trade_token {
+            self.trade_token = Some(token.to_string());
+            Ok(token.to_string())
         } else {
-            Err(WebullError::AuthenticationError(
-                "Failed to get trade token".to_string(),
-            ))
+            // Check for error message
+            if let Some(msg) = result.get("msg").and_then(|m| m.as_str()) {
+                Err(WebullError::AuthenticationError(
+                    format!("Failed to get trade token: {}", msg),
+                ))
+            } else {
+                Err(WebullError::AuthenticationError(
+                    "Failed to get trade token".to_string(),
+                ))
+            }
         }
     }
 

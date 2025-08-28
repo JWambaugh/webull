@@ -60,6 +60,30 @@ async fn main() -> Result<()> {
                 println!("✅ Login successful to PAPER account!\n");
             } else {
                 println!("✅ Login successful to LIVE account!\n");
+                
+                // For live trading, we need to get the trade token to place orders
+                println!("🔐 Getting trade token for live trading...");
+                
+                // Try to get trading PIN from environment or prompt user
+                let trading_pin = match env::var("WEBULL_TRADING_PIN") {
+                    Ok(pin) => pin,
+                    Err(_) => {
+                        println!("Trading PIN required for placing orders.");
+                        get_user_input("Enter your 6-digit trading PIN: ")
+                    }
+                };
+                
+                match client.get_trade_token(&trading_pin).await {
+                    Ok(token) => {
+                        println!("✅ Trade token obtained successfully!");
+                        println!("   Token length: {} characters\n", token.len());
+                    }
+                    Err(e) => {
+                        error!("⚠️  Failed to get trade token: {}", e);
+                        println!("Note: You won't be able to place orders without a trade token.");
+                        println!("You can still view account info, quotes, and other read-only operations.\n");
+                    }
+                }
             }
         }
         Err(e) => {
