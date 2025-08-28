@@ -4,6 +4,19 @@ An unofficial Rust library for the Webull API, providing full functionality for 
 
 This library is a Rust port of the excellent [webull Python library](https://github.com/tedchou12/webull) by [@tedchou12](https://github.com/tedchou12). The Python library served as the foundation for understanding Webull's API structure and authentication mechanisms.
 
+## ⚠️ Important Disclaimer
+
+**This is an unofficial library that is not affiliated with or endorsed by Webull.**
+
+Webull may change their API endpoints, authentication methods, or data structures at any time without notice, which could cause this library to stop working partially or completely. Users of this library should:
+
+- Be prepared for potential breaking changes
+- Test thoroughly in paper trading before using with real money
+- Implement proper error handling for API failures
+- Consider this library experimental and use at your own risk
+
+The maintainers of this library cannot guarantee its continued functionality and are not responsible for any losses incurred from its use.
+
 ## Features
 
 - ✅ Full authentication support (including MFA)
@@ -266,10 +279,6 @@ match client.login(&username, &password, None, None, None, None).await {
 ## License
 
 MIT
-
-## Disclaimer
-
-This is an unofficial API wrapper. Use at your own risk. The authors are not responsible for any financial losses incurred through use of this software.
 
 ## Acknowledgements
 
