@@ -2,6 +2,8 @@
 
 An unofficial Rust library for the Webull API, providing full functionality for trading, market data, and streaming.
 
+This library is a Rust port of the excellent [webull Python library](https://github.com/tedchou12/webull) by [@tedchou12](https://github.com/tedchou12). The Python library served as the foundation for understanding Webull's API structure and authentication mechanisms.
+
 ## Features
 
 - ✅ Full authentication support (including MFA)
@@ -21,49 +23,91 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-webull = "0.6.1"
+webull = "0.1.1"
 ```
 
 ## Quick Start
+
+### Unified Client Interface
+
+The library provides a unified `WebullClient` enum that can work with both live and paper trading:
 
 ```rust
 use webull::{WebullClient, models::*, error::Result};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Create client
-    let mut client = WebullClient::new(Some(6))?; // 6 = US region
+    // Create paper trading client
+    let mut client = WebullClient::new_paper(Some(6))?; // 6 = US region
+    
+    // Or create live trading client
+    // let mut client = WebullClient::new_live(Some(6))?;
     
     // Login
     client.login("email@example.com", "password", None, None, None, None).await?;
     
     // Get account info
     let account = client.get_account().await?;
-    println!("Account balance: ${}", account.net_liquidation);
+    if let Some(net_liquidation) = account.net_liquidation {
+        println!("Account balance: ${:.2}", net_liquidation);
+    }
     
-    // Get quotes
-    let quote = client.get_quotes("913256135").await?; // AAPL ticker ID
-    println!("AAPL price: ${}", quote.close);
-    
-    // Place order (requires trade token)
-    client.get_trade_token("password").await?;
-    
-    let order = PlaceOrderRequest {
-        ticker_id: 913256135,
-        action: OrderAction::Buy,
-        order_type: OrderType::Limit,
-        time_in_force: TimeInForce::Day,
-        quantity: 1.0,
-        limit_price: Some(150.0),
-        // ... other fields
-    };
-    
-    let order_id = client.place_order(&order).await?;
-    println!("Order placed: {}", order_id);
+    // Find ticker
+    let tickers = client.find_ticker("AAPL").await?;
+    if let Some(ticker) = tickers.first() {
+        // Get quotes
+        let quote = client.get_quotes(&ticker.ticker_id.to_string()).await?;
+        println!("AAPL price: ${}", quote.close);
+        
+        // Place order (requires trade token for live trading)
+        if !client.is_paper() {
+            client.get_trade_token("password").await?;
+        }
+        
+        let order = PlaceOrderRequest {
+            ticker_id: ticker.ticker_id,
+            action: OrderAction::Buy,
+            order_type: OrderType::Limit,
+            time_in_force: TimeInForce::Day,
+            quantity: 1.0,
+            limit_price: Some(150.0),
+            stop_price: None,
+            outside_regular_trading_hour: false,
+            serial_id: None,
+            combo_type: None,
+        };
+        
+        let order_id = client.place_order(&order).await?;
+        println!("Order placed: {}", order_id);
+    }
     
     Ok(())
 }
 ```
+
+### Direct Client Usage
+
+You can also use the specific client implementations directly:
+
+```rust
+use webull::{LiveWebullClient, PaperWebullClient, models::*, error::Result};
+
+// For live trading
+let mut live_client = LiveWebullClient::new(Some(6))?;
+
+// For paper trading
+let mut paper_client = PaperWebullClient::new(Some(6))?;
+```
+
+## Architecture
+
+The library is organized into three main client types:
+
+1. **`WebullClient`** - A unified enum that provides a common interface for both live and paper trading
+2. **`LiveWebullClient`** - Direct implementation for live trading operations
+3. **`PaperWebullClient`** - Implementation for paper (simulated) trading
+
+The unified `WebullClient` enum automatically delegates method calls to the appropriate underlying implementation, making it easy to switch between live and paper trading modes.
 
 ## Streaming Example
 
@@ -82,18 +126,6 @@ stream.connect(&access_token, &device_id).await?;
 stream.subscribe_ticker("913256135", TopicTypes::basic()).await?;
 ```
 
-## Paper Trading
-
-```rust
-use webull::PaperWebullClient;
-
-let mut client = PaperWebullClient::new(Some(6))?;
-client.login("email@example.com", "password", None, None, None, None).await?;
-
-// Place paper trades
-let order_id = client.place_order(&ticker_id, &order).await?;
-```
-
 ## Environment Variables
 
 Create a `.env` file:
@@ -109,14 +141,54 @@ WEBULL_TRADE_PASSWORD=your_trade_password
 See the `examples/` directory for more complete examples:
 
 - `basic_usage.rs` - Login, get account info, positions, and quotes
-- `place_order.rs` - Place and cancel orders
+- `trading_test.rs` - Interactive trading test with both live and paper support
+- `paper_trading.rs` - Paper trading specific functionality
+- `place_order.rs` - Place and cancel orders with live trading
 - `streaming.rs` - Real-time data streaming
-- `paper_trading.rs` - Paper trading functionality
+- `set_device_id.rs` - Device ID management utility
+- `test_bars.rs` - Historical data retrieval example
 
 Run examples with:
 
 ```bash
 cargo run --example basic_usage
+
+# Interactive trading test (supports both live and paper)
+cargo run --example trading_test
+
+# Paper trading only
+cargo run --example paper_trading
+```
+
+## Working with Orders
+
+### Getting Current Orders
+
+```rust
+// Get open orders
+let orders = client.get_orders(None).await?;
+for order in orders {
+    println!("Order {}: {} {} shares of {} at ${:.2}", 
+        order.order_id, 
+        order.action, 
+        order.quantity, 
+        order.ticker.symbol,
+        order.limit_price.unwrap_or(0.0)
+    );
+}
+```
+
+### Canceling Orders
+
+```rust
+// Get and cancel all open orders
+let orders = client.get_orders(None).await?;
+for order in orders {
+    if order.status == OrderStatus::Working {
+        client.cancel_order(&order.order_id).await?;
+        println!("Cancelled order {}", order.order_id);
+    }
+}
 ```
 
 ## API Coverage
@@ -176,6 +248,10 @@ MIT
 ## Disclaimer
 
 This is an unofficial API wrapper. Use at your own risk. The authors are not responsible for any financial losses incurred through use of this software.
+
+## Acknowledgements
+
+- **[@tedchou12](https://github.com/tedchou12)** - Creator of the original [webull Python library](https://github.com/tedchou12/webull) which this Rust implementation is based on. The Python library's clean design and comprehensive API coverage made this port possible.
 
 ## Contributing
 
