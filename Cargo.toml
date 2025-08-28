@@ -1,13 +1,14 @@
 [package]
 name = "webull"
 version = "1.0.0"
-authors = ["Webull Rust Client"]
+authors = ["Jordan Wambaugh"]
 edition = "2021"
 description = "The unofficial Rust interface for the WeBull API"
 license = "MIT"
-repository = "https://github.com/yourusername/webull"
+repository = "https://github.com/JWambaugh/webull"
 keywords = ["webull", "trading", "api", "finance", "stocks"]
 categories = ["api-bindings", "finance"]
+readme = "README.md"
 
 [dependencies]
 reqwest = { version = "0.11", features = ["json", "cookies", "gzip"] }
