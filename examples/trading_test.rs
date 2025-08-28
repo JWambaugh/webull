@@ -5,7 +5,7 @@ use std::env;
 use std::io::{self, Write};
 use std::time::Duration;
 use tokio::time::sleep;
-use webull::{error::Result, models::*, WebullClient};
+use webull_unofficial::{error::Result, models::*, WebullClient};
 
 // Interactive trading test suite
 

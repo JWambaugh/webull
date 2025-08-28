@@ -1,6 +1,6 @@
 use dotenv::dotenv;
 use std::env;
-use webull::{error::Result, WebullClient};
+use webull_unofficial::{error::Result, WebullClient};
 
 #[tokio::main]
 async fn main() -> Result<()> {

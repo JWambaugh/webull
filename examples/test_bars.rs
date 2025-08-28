@@ -1,6 +1,6 @@
 use dotenv::dotenv;
 use std::env;
-use webull::{error::Result, WebullClient};
+use webull_unofficial::{error::Result, WebullClient};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -11,24 +11,31 @@ async fn main() -> Result<()> {
     let password = env::var("WEBULL_PASSWORD").expect("WEBULL_PASSWORD not set");
 
     let mut client = WebullClient::new_paper(Some(6))?;
-    client.login(&username, &password, None, None, None, None).await?;
-    
+    client
+        .login(&username, &password, None, None, None, None)
+        .await?;
+
     println!("Searching for AAPL...");
     let tickers = client.find_ticker("AAPL").await?;
-    
+
     if let Some(ticker) = tickers.first() {
         println!("Found ticker: {} (ID: {})", ticker.symbol, ticker.ticker_id);
         println!("Fetching bars with interval='1d', count=10...");
-        
-        match client.get_bars(&ticker.ticker_id.to_string(), "1d", 10, None).await {
+
+        match client
+            .get_bars(&ticker.ticker_id.to_string(), "1d", 10, None)
+            .await
+        {
             Ok(bars) => {
                 println!("Got {} bars", bars.len());
                 if bars.is_empty() {
                     println!("No bars returned!");
                 } else {
                     for (i, bar) in bars.iter().enumerate().take(5) {
-                        println!("Bar {}: open={:.2}, close={:.2}, volume={}", 
-                            i, bar.open, bar.close, bar.volume);
+                        println!(
+                            "Bar {}: open={:.2}, close={:.2}, volume={}",
+                            i, bar.open, bar.close, bar.volume
+                        );
                     }
                 }
             }
@@ -37,6 +44,6 @@ async fn main() -> Result<()> {
             }
         }
     }
-    
+
     Ok(())
 }

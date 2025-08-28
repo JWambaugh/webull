@@ -2253,7 +2253,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "webull"
+name = "webull_unofficial"
 version = "1.0.0"
 dependencies = [
  "anyhow",

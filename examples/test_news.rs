@@ -6,7 +6,7 @@
 // - Display article titles, sources, and summaries
 // Useful for sentiment analysis and market research.
 
-use webull::{WebullClient, Result};
+use webull_unofficial::{WebullClient, Result};
 use std::env;
 
 #[tokio::main]

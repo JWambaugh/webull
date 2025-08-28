@@ -1,4 +1,4 @@
-use webull::{LiveWebullClient, error::Result, utils::save_did};
+use webull_unofficial::{LiveWebullClient, error::Result, utils::save_did};
 use std::path::Path;
 use std::io::{self, Write};
 

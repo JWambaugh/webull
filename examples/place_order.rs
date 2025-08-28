@@ -1,4 +1,4 @@
-use webull::{PaperWebullClient, models::*, error::Result};
+use webull_unofficial::{PaperWebullClient, models::*, error::Result};
 use dotenv::dotenv;
 use std::env;
 

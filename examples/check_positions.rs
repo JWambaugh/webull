@@ -6,7 +6,7 @@
 // - How to get positions directly via get_positions()
 // - Position details like quantity, average cost, and P&L
 
-use webull::{WebullClient, Result};
+use webull_unofficial::{WebullClient, Result};
 use std::env;
 
 #[tokio::main]

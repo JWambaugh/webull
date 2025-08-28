@@ -7,7 +7,7 @@
 // - Display detailed account metrics
 // Essential for portfolio management and performance tracking.
 
-use webull::{WebullClient, Result};
+use webull_unofficial::{WebullClient, Result};
 use std::env;
 
 #[tokio::main]

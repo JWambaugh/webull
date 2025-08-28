@@ -10,7 +10,7 @@
 use dotenv::dotenv;
 use std::env;
 use uuid;
-use webull::{error::Result, models::*, WebullClient};
+use webull_unofficial::{error::Result, models::*, WebullClient};
 
 #[tokio::main]
 async fn main() -> Result<()> {

@@ -1,6 +1,7 @@
 # Webull Rust API
 
 An unofficial Rust library for the Webull API, providing full functionality for trading, market data, and streaming.
+Because this library uses the webull app API's, Official API key access is not required.
 
 This library is a Rust port of the excellent [webull Python library](https://github.com/tedchou12/webull) by [@tedchou12](https://github.com/tedchou12). The Python library served as the foundation for understanding Webull's API structure and authentication mechanisms.
 
@@ -42,7 +43,7 @@ webull = "1.0.0"
 The library provides a unified `WebullClient` enum that can work with both live and paper trading:
 
 ```rust
-use webull::{WebullClient, models::*, error::Result};
+use webull_unofficial::{WebullClient, models::*, error::Result};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -100,7 +101,7 @@ async fn main() -> Result<()> {
 You can also use the specific client implementations directly:
 
 ```rust
-use webull::{LiveWebullClient, PaperWebullClient, models::*, error::Result};
+use webull_unofficial::{LiveWebullClient, PaperWebullClient, models::*, error::Result};
 
 // For live trading
 let mut live_client = LiveWebullClient::new(Some(6))?;
@@ -126,7 +127,7 @@ The unified `WebullClient` enum automatically delegates method calls to the appr
 ## Streaming Example
 
 ```rust
-use webull::{StreamConn, stream::{StreamConfig, TopicTypes}};
+use webull_unofficial::{StreamConn, stream::{StreamConfig, TopicTypes}};
 
 // Create streaming connection
 let config = StreamConfig {
