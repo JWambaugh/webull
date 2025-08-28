@@ -1,6 +1,6 @@
 use dotenv::dotenv;
 use std::env;
-use webull::{error::Result, models::*, PaperWebullClient};
+use webull::{error::Result, models::*, WebullClient};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -13,7 +13,7 @@ async fn main() -> Result<()> {
     let password = env::var("WEBULL_PASSWORD").expect("WEBULL_PASSWORD not set");
     println!("Using username: {}", username);
     // Create a paper trading client
-    let mut client = PaperWebullClient::new(Some(6))?; // 6 = US region
+    let mut client = WebullClient::new_paper(Some(6))?; // 6 = US region
 
     println!("Logging in...");
 

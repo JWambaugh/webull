@@ -11,7 +11,7 @@ async fn main() -> Result<()> {
     let password = env::var("WEBULL_PASSWORD").expect("WEBULL_PASSWORD not set");
 
     println!("Logging in to live trading account...");
-    let mut client = WebullClient::new(Some(6))?;
+    let mut client = WebullClient::new_live(Some(6))?;
     client.login(&username, &password, None, None, None, None).await?;
     
     println!("Login successful!");

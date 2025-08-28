@@ -5,7 +5,7 @@ use std::env;
 use std::io::{self, Write};
 use std::time::Duration;
 use tokio::time::sleep;
-use webull::{error::Result, models::*, PaperWebullClient};
+use webull::{error::Result, models::*, WebullClient};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -13,19 +13,55 @@ async fn main() -> Result<()> {
     env_logger::init();
 
     println!("=====================================");
-    println!("   Webull Paper Trading Test Suite  ");
+    println!("      Webull Trading Test Suite      ");
     println!("=====================================\n");
+
+    // Ask user for trading mode
+    println!("Select trading mode:");
+    println!("1. Paper Trading (simulated)");
+    println!("2. Live Trading (real money)");
+    println!();
+    
+    let mode_choice = get_user_input("Enter your choice (1 or 2): ");
+    let is_paper = match mode_choice.trim() {
+        "1" => true,
+        "2" => {
+            println!("\n⚠️  WARNING: Live trading uses REAL MONEY!");
+            let confirm = get_user_input("Type 'CONFIRM' to proceed with live trading: ");
+            if confirm.trim() != "CONFIRM" {
+                println!("Live trading cancelled. Switching to paper trading.");
+                true
+            } else {
+                false
+            }
+        }
+        _ => {
+            println!("Invalid choice. Defaulting to paper trading.");
+            true
+        }
+    };
 
     let (username, password) = get_credentials();
 
-    let mut client = PaperWebullClient::new(Some(6))?;
-
-    println!("📊 Logging in to paper trading account...");
+    let mut client = if is_paper {
+        println!("\n📊 Logging in to PAPER trading account...");
+        WebullClient::new_paper(Some(6))?
+    } else {
+        println!("\n💰 Logging in to LIVE trading account...");
+        WebullClient::new_live(Some(6))?
+    };
+    
     match client
         .login(&username, &password, None, None, None, None)
         .await
     {
-        Ok(_) => println!("✅ Login successful!\n"),
+        Ok(_) => {
+            if is_paper {
+                println!("✅ Login successful to PAPER account!\n");
+            } else {
+                println!("✅ Login successful to LIVE account!\n");
+            }
+        }
         Err(e) => {
             error!("❌ Login failed: {}", e);
             return Err(e);
@@ -33,7 +69,7 @@ async fn main() -> Result<()> {
     }
 
     loop {
-        display_menu();
+        display_menu(client.is_paper());
 
         let choice = get_user_input("Enter your choice: ");
 
@@ -65,9 +101,9 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-fn display_menu() {
+fn display_menu(is_paper: bool) {
     println!("\n=====================================");
-    println!("           MAIN MENU                 ");
+    println!("      {} TRADING MENU", if is_paper { "PAPER" } else { "LIVE" });
     println!("=====================================");
     println!("1.  View Account Information");
     println!("2.  Get Stock Quote");
@@ -81,6 +117,9 @@ fn display_menu() {
     println!("10. Get Market News");
     println!("11. Run Automated Test Suite");
     println!("0.  Exit");
+    if !is_paper {
+        println!("\n⚠️  LIVE TRADING - Real Money!");
+    }
     println!("=====================================");
 }
 
@@ -131,7 +170,7 @@ fn confirm_action(action: &str) -> bool {
     response.to_lowercase() == "y" || response.to_lowercase() == "yes"
 }
 
-async fn display_account_info(client: &PaperWebullClient) -> Result<()> {
+async fn display_account_info(client: &WebullClient) -> Result<()> {
     println!("\n💰 Account Information");
     println!("─────────────────────────");
 
@@ -171,7 +210,7 @@ async fn display_account_info(client: &PaperWebullClient) -> Result<()> {
     Ok(())
 }
 
-async fn get_quote_interactive(client: &PaperWebullClient) -> Result<()> {
+async fn get_quote_interactive(client: &WebullClient) -> Result<()> {
     let symbol = get_user_input("Enter stock symbol (e.g., AAPL): ").to_uppercase();
 
     println!("\n🔍 Fetching quote for {}...", symbol);
@@ -202,7 +241,7 @@ async fn get_quote_interactive(client: &PaperWebullClient) -> Result<()> {
     Ok(())
 }
 
-async fn get_historical_data_interactive(client: &PaperWebullClient) -> Result<()> {
+async fn get_historical_data_interactive(client: &WebullClient) -> Result<()> {
     let symbol = get_user_input("Enter stock symbol (e.g., AAPL): ").to_uppercase();
     let days = get_user_input("Number of days to fetch (default 10): ");
     let days = days.parse::<i32>().unwrap_or(10);
@@ -264,7 +303,7 @@ async fn get_historical_data_interactive(client: &PaperWebullClient) -> Result<(
     Ok(())
 }
 
-async fn place_market_order_interactive(client: &PaperWebullClient) -> Result<()> {
+async fn place_market_order_interactive(client: &WebullClient) -> Result<()> {
     println!("\n🛒 Place Market Order");
     println!("─────────────────────");
 
@@ -344,7 +383,7 @@ async fn place_market_order_interactive(client: &PaperWebullClient) -> Result<()
     Ok(())
 }
 
-async fn place_limit_order_interactive(client: &PaperWebullClient) -> Result<()> {
+async fn place_limit_order_interactive(client: &WebullClient) -> Result<()> {
     println!("\n💰 Place Limit Order");
     println!("────────────────────");
 
@@ -434,7 +473,7 @@ async fn place_limit_order_interactive(client: &PaperWebullClient) -> Result<()>
     Ok(())
 }
 
-async fn place_stop_order_interactive(client: &PaperWebullClient) -> Result<()> {
+async fn place_stop_order_interactive(client: &WebullClient) -> Result<()> {
     println!("\n🛡️ Place Stop-Loss Order");
     println!("─────────────────────────");
 
@@ -506,7 +545,7 @@ async fn place_stop_order_interactive(client: &PaperWebullClient) -> Result<()> 
     Ok(())
 }
 
-async fn display_current_orders(client: &PaperWebullClient) -> Result<()> {
+async fn display_current_orders(client: &WebullClient) -> Result<()> {
     println!("\n📋 Current Orders");
     println!("─────────────────");
 
@@ -552,7 +591,7 @@ async fn display_current_orders(client: &PaperWebullClient) -> Result<()> {
     Ok(())
 }
 
-async fn cancel_order_interactive(client: &PaperWebullClient) -> Result<()> {
+async fn cancel_order_interactive(client: &WebullClient) -> Result<()> {
     println!("\n🔄 Cancel Order");
     println!("───────────────");
 
@@ -560,15 +599,15 @@ async fn cancel_order_interactive(client: &PaperWebullClient) -> Result<()> {
         Ok(orders) => {
             let pending_orders: Vec<_> = orders
                 .iter()
-                .filter(|o| matches!(o.status, OrderStatus::Pending | OrderStatus::PartialFilled))
+                .filter(|o| matches!(o.status, OrderStatus::Working | OrderStatus::Pending | OrderStatus::PartialFilled))
                 .collect();
 
             if pending_orders.is_empty() {
-                println!("No pending orders to cancel");
+                println!("No open orders to cancel");
                 return Ok(());
             }
 
-            println!("\nPending Orders:");
+            println!("\nOpen Orders:");
             for (i, order) in pending_orders.iter().enumerate() {
                 let action_str = match order.action {
                     OrderAction::Buy => "BUY",
@@ -625,7 +664,7 @@ async fn cancel_order_interactive(client: &PaperWebullClient) -> Result<()> {
     Ok(())
 }
 
-async fn analyze_portfolio(client: &PaperWebullClient) -> Result<()> {
+async fn analyze_portfolio(client: &WebullClient) -> Result<()> {
     println!("\n📊 Portfolio Analysis");
     println!("─────────────────────");
 
@@ -693,11 +732,34 @@ async fn analyze_portfolio(client: &PaperWebullClient) -> Result<()> {
             error!("Failed to analyze portfolio: {}", e);
         }
     }
+    
+    // Display positions (if available for live trading)
+    match client.get_positions().await {
+        Ok(positions) => {
+            if !positions.is_empty() {
+                println!("\nCurrent Positions:");
+                println!("──────────────────");
+                for position in positions.iter() {
+                    println!("  {} {} shares @ avg ${:.2}", 
+                        position.ticker.symbol, 
+                        position.position, 
+                        position.cost_price);
+                    println!("    Market Value: ${:.2}", position.market_value);
+                    let emoji = if position.unrealized_profit_loss > 0.0 { "📈" } else { "📉" };
+                    println!("    {} Unrealized P&L: ${:.2} ({:.2}%)", 
+                        emoji, position.unrealized_profit_loss, position.unrealized_profit_loss_rate * 100.0);
+                }
+            }
+        }
+        Err(_) => {
+            // Silently ignore errors getting positions (not available for paper trading)
+        }
+    }
 
     Ok(())
 }
 
-async fn get_news_interactive(client: &PaperWebullClient) -> Result<()> {
+async fn get_news_interactive(client: &WebullClient) -> Result<()> {
     let symbol = get_user_input("Enter stock symbol for news (e.g., AAPL): ").to_uppercase();
 
     println!("\n📰 Fetching news for {}...", symbol);
@@ -734,7 +796,7 @@ async fn get_news_interactive(client: &PaperWebullClient) -> Result<()> {
     Ok(())
 }
 
-async fn run_automated_test_suite(client: &PaperWebullClient) -> Result<()> {
+async fn run_automated_test_suite(client: &WebullClient) -> Result<()> {
     println!("\n🤖 Running Automated Test Suite");
     println!("════════════════════════════════");
 

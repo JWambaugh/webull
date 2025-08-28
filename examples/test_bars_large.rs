@@ -1,6 +1,6 @@
 use dotenv::dotenv;
 use std::env;
-use webull::{error::Result, PaperWebullClient};
+use webull::{error::Result, WebullClient};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -10,7 +10,7 @@ async fn main() -> Result<()> {
     let username = env::var("WEBULL_USERNAME").expect("WEBULL_USERNAME not set");
     let password = env::var("WEBULL_PASSWORD").expect("WEBULL_PASSWORD not set");
 
-    let mut client = PaperWebullClient::new(Some(6))?;
+    let mut client = WebullClient::new_paper(Some(6))?;
     client.login(&username, &password, None, None, None, None).await?;
     
     println!("Searching for AAPL...");
