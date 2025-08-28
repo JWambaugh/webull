@@ -1,3 +1,11 @@
+// Check Positions Example
+//
+// This example demonstrates how to retrieve and display positions
+// for both live and paper trading accounts. It shows:
+// - How to get positions from account details
+// - How to get positions directly via get_positions()
+// - Position details like quantity, average cost, and P&L
+
 use webull::{WebullClient, Result};
 use std::env;
 

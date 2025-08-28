@@ -1,3 +1,11 @@
+// News Retrieval Example
+//
+// This example shows how to fetch and display news articles for stocks:
+// - Get ticker ID from symbol
+// - Retrieve latest news articles
+// - Display article titles, sources, and summaries
+// Useful for sentiment analysis and market research.
+
 use webull::{WebullClient, Result};
 use std::env;
 

@@ -1,3 +1,15 @@
+// Basic Usage Example for Webull Rust API
+//
+// This example demonstrates the fundamental operations with the Webull API:
+// - Authentication (login/logout)
+// - Account information retrieval
+// - Position management
+// - Ticker searching and quotes
+// - Order history
+// - Real-time market data
+//
+// This example uses paper trading by default for safety.
+
 use dotenv::dotenv;
 use std::env;
 use webull::{error::Result, models::*, WebullClient};
@@ -60,9 +72,15 @@ async fn main() -> Result<()> {
                 println!("No positions found");
             } else {
                 for position in positions {
+                    let symbol = position
+                        .ticker
+                        .as_ref()
+                        .map(|t| t.symbol.as_str())
+                        .unwrap_or("Unknown");
+                    let pnl = position.unrealized_profit_loss.unwrap_or(0.0);
                     println!(
                         "Symbol: {}, Quantity: {}, P&L: ${:.2}",
-                        position.ticker.symbol, position.position, position.unrealized_profit_loss
+                        symbol, position.quantity, pnl
                     );
                 }
             }
@@ -105,6 +123,11 @@ async fn main() -> Result<()> {
                 println!("No recent orders");
             } else {
                 for order in orders.iter().take(5) {
+                    let symbol = order
+                        .ticker
+                        .as_ref()
+                        .map(|t| t.symbol.as_str())
+                        .unwrap_or("Unknown");
                     println!(
                         "Order {}: {} {} shares of {} at ${:.2}",
                         order.order_id,
@@ -113,7 +136,7 @@ async fn main() -> Result<()> {
                             OrderAction::Sell => "SELL",
                         },
                         order.quantity,
-                        order.ticker.symbol,
+                        symbol,
                         order.limit_price.unwrap_or(0.0)
                     );
                 }

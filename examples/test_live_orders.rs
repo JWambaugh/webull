@@ -12,10 +12,12 @@ async fn main() -> Result<()> {
 
     println!("Logging in to live trading account...");
     let mut client = WebullClient::new_live(Some(6))?;
-    client.login(&username, &password, None, None, None, None).await?;
-    
+    client
+        .login(&username, &password, None, None, None, None)
+        .await?;
+
     println!("Login successful!");
-    
+
     // Get current orders
     println!("\nFetching current open orders...");
     match client.get_orders(None).await {
@@ -27,18 +29,23 @@ async fn main() -> Result<()> {
                 for (i, order) in orders.iter().enumerate() {
                     println!("\n--- Order {} ---", i + 1);
                     println!("  Order ID: {}", order.order_id);
-                    println!("  Symbol: {}", order.ticker.symbol);
+                    let symbol = order
+                        .ticker
+                        .as_ref()
+                        .map(|t| t.symbol.as_str())
+                        .unwrap_or("Unknown");
+                    println!("  Symbol: {}", symbol);
                     println!("  Action: {:?}", order.action);
                     println!("  Order Type: {:?}", order.order_type);
                     println!("  Status: {:?}", order.status);
-                    
+
                     println!("  Quantity: {}", order.quantity);
                     println!("  Filled: {}", order.filled_quantity);
-                    
+
                     if let Some(price) = order.limit_price {
                         println!("  Limit Price: ${:.2}", price);
                     }
-                    
+
                     if let Some(avg_price) = order.avg_fill_price {
                         println!("  Avg Fill Price: ${:.2}", avg_price);
                     }
@@ -49,7 +56,7 @@ async fn main() -> Result<()> {
             println!("Error fetching orders: {:?}", e);
         }
     }
-    
+
     // Also try to get historical orders
     println!("\n\nFetching historical orders (last 10)...");
     match client.get_history_orders("All", 10).await {
@@ -57,11 +64,27 @@ async fn main() -> Result<()> {
             if let Some(orders) = history.as_array() {
                 println!("Found {} historical order(s)", orders.len());
                 for order in orders.iter().take(3) {
-                    if let Some(symbol) = order.get("ticker").and_then(|t| t.get("symbol")).and_then(|s| s.as_str()) {
-                        let action = order.get("action").and_then(|a| a.as_str()).unwrap_or("N/A");
-                        let status = order.get("status").and_then(|s| s.as_str()).unwrap_or("N/A");
-                        let order_type = order.get("orderType").and_then(|o| o.as_str()).unwrap_or("N/A");
-                        println!("  {} {} {} - Status: {}", action, symbol, order_type, status);
+                    if let Some(symbol) = order
+                        .get("ticker")
+                        .and_then(|t| t.get("symbol"))
+                        .and_then(|s| s.as_str())
+                    {
+                        let action = order
+                            .get("action")
+                            .and_then(|a| a.as_str())
+                            .unwrap_or("N/A");
+                        let status = order
+                            .get("status")
+                            .and_then(|s| s.as_str())
+                            .unwrap_or("N/A");
+                        let order_type = order
+                            .get("orderType")
+                            .and_then(|o| o.as_str())
+                            .unwrap_or("N/A");
+                        println!(
+                            "  {} {} {} - Status: {}",
+                            action, symbol, order_type, status
+                        );
                     }
                 }
             } else {
@@ -72,6 +95,6 @@ async fn main() -> Result<()> {
             println!("Error fetching historical orders: {:?}", e);
         }
     }
-    
+
     Ok(())
 }

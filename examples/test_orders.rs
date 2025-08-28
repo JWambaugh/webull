@@ -27,7 +27,10 @@ async fn main() -> Result<()> {
                 for (i, order) in orders.iter().enumerate() {
                     println!("\n--- Order {} ---", i + 1);
                     println!("  Order ID: {}", order.order_id);
-                    println!("  Symbol: {}", order.ticker.symbol);
+                    let symbol = order.ticker.as_ref()
+                        .map(|t| t.symbol.as_str())
+                        .unwrap_or("Unknown");
+                    println!("  Symbol: {}", symbol);
                     println!("  Action: {:?}", order.action);
                     println!("  Order Type: {:?}", order.order_type);
                     println!("  Status: {:?}", order.status);

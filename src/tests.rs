@@ -4,7 +4,7 @@ mod tests {
     use crate::models::*;
     use crate::utils::*;
     use crate::WebullClient;
-    use std::collections::HashMap;
+    // use std::collections::HashMap; // Not needed after screener simplification
 
     #[test]
     fn test_password_hashing() {
@@ -217,36 +217,17 @@ mod tests {
     }
 
     #[test]
-    fn test_screener_filter() {
-        let mut filters = HashMap::new();
-        filters.insert(
-            "price".to_string(),
-            ScreenerFilter {
-                min: Some(10.0),
-                max: Some(100.0),
-            },
-        );
-        filters.insert(
-            "volume".to_string(),
-            ScreenerFilter {
-                min: Some(1000000.0),
-                max: None,
-            },
-        );
-
+    fn test_screener_request() {
+        // Test simplified screener request
         let request = ScreenerRequest {
             region_id: 6,
-            plate_list: vec!["technology".to_string()],
-            sort_field: "changeRatio".to_string(),
-            sort_type: "desc".to_string(),
-            page_index: 1,
-            page_size: 50,
-            filters,
+            plate_id: 1,
+            rank_id: 0,
         };
 
         let json = serde_json::to_value(&request).unwrap();
         assert_eq!(json["regionId"], 6);
-        assert_eq!(json["pageSize"], 50);
-        assert!(json["filters"]["price"]["min"].as_f64().is_some());
+        assert_eq!(json["plateId"], 1);
+        assert_eq!(json["rankId"], 0);
     }
 }

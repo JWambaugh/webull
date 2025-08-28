@@ -7,6 +7,8 @@ use std::time::Duration;
 use tokio::time::sleep;
 use webull::{error::Result, models::*, WebullClient};
 
+// Interactive trading test suite
+
 #[tokio::main]
 async fn main() -> Result<()> {
     dotenv().ok();
@@ -21,7 +23,7 @@ async fn main() -> Result<()> {
     println!("1. Paper Trading (simulated)");
     println!("2. Live Trading (real money)");
     println!();
-    
+
     let mode_choice = get_user_input("Enter your choice (1 or 2): ");
     let is_paper = match mode_choice.trim() {
         "1" => true,
@@ -50,7 +52,7 @@ async fn main() -> Result<()> {
         println!("\n💰 Logging in to LIVE trading account...");
         WebullClient::new_live(Some(6))?
     };
-    
+
     match client
         .login(&username, &password, None, None, None, None)
         .await
@@ -60,10 +62,10 @@ async fn main() -> Result<()> {
                 println!("✅ Login successful to PAPER account!\n");
             } else {
                 println!("✅ Login successful to LIVE account!\n");
-                
+
                 // For live trading, we need to get the trade token to place orders
                 println!("🔐 Getting trade token for live trading...");
-                
+
                 // Try to get trading PIN from environment or prompt user
                 let trading_pin = match env::var("WEBULL_TRADING_PIN") {
                     Ok(pin) => pin,
@@ -72,7 +74,7 @@ async fn main() -> Result<()> {
                         get_user_input("Enter your 6-digit trading PIN: ")
                     }
                 };
-                
+
                 match client.get_trade_token(&trading_pin).await {
                     Ok(token) => {
                         println!("✅ Trade token obtained successfully!");
@@ -128,7 +130,10 @@ async fn main() -> Result<()> {
 
 fn display_menu(is_paper: bool) {
     println!("\n=====================================");
-    println!("      {} TRADING MENU", if is_paper { "PAPER" } else { "LIVE" });
+    println!(
+        "      {} TRADING MENU",
+        if is_paper { "PAPER" } else { "LIVE" }
+    );
     println!("=====================================");
     println!("1.  View Account Information");
     println!("2.  Get Stock Quote");
@@ -224,10 +229,7 @@ async fn display_account_info(client: &WebullClient) -> Result<()> {
                 println!("Unrealized P&L: ${:.2}", unrealized_pl);
             }
             if let Some(unrealized_pl_rate) = account.unrealized_profit_loss_rate {
-                println!(
-                    "Unrealized P&L Rate: {:.2}%",
-                    unrealized_pl_rate * 100.0
-                );
+                println!("Unrealized P&L Rate: {:.2}%", unrealized_pl_rate * 100.0);
             }
         }
         Err(e) => {
@@ -627,7 +629,12 @@ async fn cancel_order_interactive(client: &WebullClient) -> Result<()> {
         Ok(orders) => {
             let pending_orders: Vec<_> = orders
                 .iter()
-                .filter(|o| matches!(o.status, OrderStatus::Working | OrderStatus::Pending | OrderStatus::PartialFilled))
+                .filter(|o| {
+                    matches!(
+                        o.status,
+                        OrderStatus::Working | OrderStatus::Pending | OrderStatus::PartialFilled
+                    )
+                })
                 .collect();
 
             if pending_orders.is_empty() {
@@ -705,28 +712,34 @@ async fn display_positions(client: &WebullClient) -> Result<()> {
                 let mut total_unrealized_pnl = 0.0;
                 let mut total_cost_basis = 0.0;
 
-                println!("\n{:<8} {:<10} {:<12} {:<12} {:<12} {:<10}", 
-                    "Symbol", "Quantity", "Avg Cost", "Current", "Market Val", "P&L");
+                println!(
+                    "\n{:<8} {:<10} {:<12} {:<12} {:<12} {:<10}",
+                    "Symbol", "Quantity", "Avg Cost", "Current", "Market Val", "P&L"
+                );
                 println!("{}", "─".repeat(70));
 
                 for position in positions.iter() {
                     if let Some(ticker) = &position.ticker {
                         // Get current quote for the position
-                        let current_price = match client.get_quotes(&ticker.ticker_id.to_string()).await {
-                            Ok(quote) => quote.close,
-                            Err(_) => position.last_price
-                        };
+                        let current_price =
+                            match client.get_quotes(&ticker.ticker_id.to_string()).await {
+                                Ok(quote) => quote.close,
+                                Err(_) => position.last_price,
+                            };
 
                         let market_value = position.market_value;
                         let cost_basis = position.quantity * position.avg_cost;
-                        let unrealized_pnl = position.unrealized_profit_loss.unwrap_or(market_value - cost_basis);
-                        let pnl_percentage = position.unrealized_profit_loss_rate.unwrap_or_else(|| {
-                            if cost_basis > 0.0 {
-                                unrealized_pnl / cost_basis
-                            } else {
-                                0.0
-                            }
-                        }) * 100.0;
+                        let unrealized_pnl = position
+                            .unrealized_profit_loss
+                            .unwrap_or(market_value - cost_basis);
+                        let pnl_percentage =
+                            position.unrealized_profit_loss_rate.unwrap_or_else(|| {
+                                if cost_basis > 0.0 {
+                                    unrealized_pnl / cost_basis
+                                } else {
+                                    0.0
+                                }
+                            }) * 100.0;
 
                         // Track totals
                         total_market_value += market_value;
@@ -734,9 +747,16 @@ async fn display_positions(client: &WebullClient) -> Result<()> {
                         total_cost_basis += cost_basis;
 
                         // Color coding for P&L (emoji indicators)
-                        let pnl_indicator = if unrealized_pnl > 0.0 { "📈" } else if unrealized_pnl < 0.0 { "📉" } else { "➡️" };
+                        let pnl_indicator = if unrealized_pnl > 0.0 {
+                            "📈"
+                        } else if unrealized_pnl < 0.0 {
+                            "📉"
+                        } else {
+                            "➡️"
+                        };
 
-                        println!("{:<8} {:<10.2} ${:<11.2} ${:<11.2} ${:<11.2} {}{:>8.2} ({:>6.2}%)",
+                        println!(
+                            "{:<8} {:<10.2} ${:<11.2} ${:<11.2} ${:<11.2} {}{:>8.2} ({:>6.2}%)",
                             ticker.symbol,
                             position.quantity,
                             position.avg_cost,
@@ -750,7 +770,7 @@ async fn display_positions(client: &WebullClient) -> Result<()> {
                 }
 
                 println!("{}", "─".repeat(70));
-                
+
                 // Summary
                 let total_pnl_percentage = if total_cost_basis > 0.0 {
                     (total_unrealized_pnl / total_cost_basis) * 100.0
@@ -762,8 +782,10 @@ async fn display_positions(client: &WebullClient) -> Result<()> {
                 println!("  Total Positions: {}", positions.len());
                 println!("  Total Cost Basis: ${:.2}", total_cost_basis);
                 println!("  Total Market Value: ${:.2}", total_market_value);
-                println!("  Total Unrealized P&L: ${:.2} ({:.2}%)", 
-                    total_unrealized_pnl, total_pnl_percentage);
+                println!(
+                    "  Total Unrealized P&L: ${:.2} ({:.2}%)",
+                    total_unrealized_pnl, total_pnl_percentage
+                );
 
                 // Performance indicator
                 if total_unrealized_pnl > 0.0 {
@@ -786,7 +808,8 @@ async fn display_positions(client: &WebullClient) -> Result<()> {
                     println!("\n  Top Performers:");
                     for (i, position) in sorted_positions.iter().take(3).enumerate() {
                         if let Some(ticker) = &position.ticker {
-                            let pnl_rate = position.unrealized_profit_loss_rate.unwrap_or(0.0) * 100.0;
+                            let pnl_rate =
+                                position.unrealized_profit_loss_rate.unwrap_or(0.0) * 100.0;
                             if pnl_rate != 0.0 {
                                 println!("    {}. {} ({:+.2}%)", i + 1, ticker.symbol, pnl_rate);
                             }
@@ -816,7 +839,7 @@ async fn analyze_portfolio(client: &WebullClient) -> Result<()> {
                 let market_value = account.total_market_value.unwrap_or(0.0);
                 cash + market_value
             });
-            
+
             let cash_percentage = if total_value > 0.0 {
                 account
                     .total_cash
@@ -825,7 +848,7 @@ async fn analyze_portfolio(client: &WebullClient) -> Result<()> {
             } else {
                 0.0
             };
-            
+
             let invested_percentage = if total_value > 0.0 {
                 account
                     .total_market_value
@@ -876,7 +899,7 @@ async fn analyze_portfolio(client: &WebullClient) -> Result<()> {
             error!("Failed to analyze portfolio: {}", e);
         }
     }
-    
+
     // Display positions (if available for live trading)
     match client.get_positions().await {
         Ok(positions) => {
@@ -885,17 +908,21 @@ async fn analyze_portfolio(client: &WebullClient) -> Result<()> {
                 println!("──────────────────");
                 for position in positions.iter() {
                     if let Some(ticker) = &position.ticker {
-                        println!("  {} {} shares @ avg ${:.2}", 
-                            ticker.symbol, 
-                            position.quantity, 
-                            position.avg_cost);
+                        println!(
+                            "  {} {} shares @ avg ${:.2}",
+                            ticker.symbol, position.quantity, position.avg_cost
+                        );
                         println!("    Market Value: ${:.2}", position.market_value);
-                        
+
                         if let Some(pnl) = position.unrealized_profit_loss {
                             let emoji = if pnl > 0.0 { "📈" } else { "📉" };
                             let pnl_rate = position.unrealized_profit_loss_rate.unwrap_or(0.0);
-                            println!("    {} Unrealized P&L: ${:.2} ({:.2}%)", 
-                                emoji, pnl, pnl_rate * 100.0);
+                            println!(
+                                "    {} Unrealized P&L: ${:.2} ({:.2}%)",
+                                emoji,
+                                pnl,
+                                pnl_rate * 100.0
+                            );
                         }
                     }
                 }
@@ -934,13 +961,15 @@ async fn get_news_interactive(client: &WebullClient) -> Result<()> {
                     } else {
                         println!("   (No summary available)");
                     }
-                    let source = news.source_name.as_ref()
+                    let source = news
+                        .source_name
+                        .as_ref()
                         .or(news.collect_source.as_ref())
                         .map(|s| s.as_str())
                         .unwrap_or("Unknown");
                     // news_time is now a String, extract date part if available
                     let time_str = if news.news_time.len() >= 10 {
-                        &news.news_time[..10]  // Just show date part
+                        &news.news_time[..10] // Just show date part
                     } else {
                         &news.news_time
                     };

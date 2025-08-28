@@ -1,3 +1,12 @@
+// Paper Trading Example
+//
+// This example demonstrates paper (simulated) trading functionality:
+// - Login to paper trading account
+// - Place various order types (market, limit, stop-loss)
+// - Monitor and cancel orders
+// - Track positions and P&L
+// Perfect for testing strategies without risking real money.
+
 use dotenv::dotenv;
 use std::env;
 use uuid;

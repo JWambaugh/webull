@@ -1,3 +1,12 @@
+// Portfolio Analysis Example
+//
+// This example demonstrates comprehensive portfolio analysis:
+// - Calculate total portfolio value
+// - Analyze cash vs invested percentages
+// - Track overall P&L performance
+// - Display detailed account metrics
+// Essential for portfolio management and performance tracking.
+
 use webull::{WebullClient, Result};
 use std::env;
 

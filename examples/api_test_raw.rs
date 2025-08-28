@@ -1,3 +1,12 @@
+// Raw API Testing Tool
+//
+// This example captures raw API responses for debugging and model validation:
+// - Tests all major Webull API endpoints
+// - Saves raw JSON responses to files
+// - Tests both paper and live trading endpoints
+// - Helps identify API changes and response format differences
+// Use this when models fail to parse API responses correctly.
+
 use chrono::Local;
 use reqwest::{Client, header::{HeaderMap, HeaderValue, CONTENT_TYPE}};
 use serde_json::{json, Value};
