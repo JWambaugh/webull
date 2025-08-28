@@ -1,6 +1,21 @@
 use serde::{Deserialize, Serialize};
 use serde::de::{self, Deserializer};
 use chrono::{DateTime, Utc};
+use serde_json::Value;
+
+// Custom deserializer for fields that can be either string or number
+fn deserialize_optional_string_or_number<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let opt_value: Option<Value> = Option::deserialize(deserializer)?;
+    match opt_value {
+        Some(Value::String(s)) => Ok(Some(s)),
+        Some(Value::Number(n)) => Ok(Some(n.to_string())),
+        Some(_) => Err(de::Error::custom("expected string or number")),
+        None => Ok(None),
+    }
+}
 
 // ============= Login Models =============
 
@@ -113,7 +128,7 @@ pub struct Account {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountDetail {
-    #[serde(rename = "secAccountId")]
+    #[serde(rename = "secAccountId", deserialize_with = "deserialize_optional_string_or_number")]
     pub account_id: Option<String>,
     pub account_type: Option<String>,
     pub broker_account_id: Option<String>,
