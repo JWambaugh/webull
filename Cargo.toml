@@ -1,11 +1,11 @@
 [package]
 name = "webull"
-version = "0.1.1"
+version = "1.0.0"
 authors = ["Webull Rust Client"]
 edition = "2021"
 description = "The unofficial Rust interface for the WeBull API"
 license = "MIT"
-repository = "https://github.com/yourusername/webull-rust"
+repository = "https://github.com/yourusername/webull"
 keywords = ["webull", "trading", "api", "finance", "stocks"]
 categories = ["api-bindings", "finance"]
 

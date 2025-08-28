@@ -11,11 +11,7 @@ This library is a Rust port of the excellent [webull Python library](https://git
 - ✅ Market data and quotes
 - ✅ Order placement and management
 - ✅ Real-time streaming via MQTT
-- ✅ Options trading support
-- ✅ Account management
-- ✅ Technical indicators and charts
 - ✅ News and fundamentals
-- ✅ Screener functionality
 
 ## Installation
 
@@ -23,7 +19,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-webull = "0.1.1"
+webull = "1.0.0"
 ```
 
 ## Quick Start
@@ -39,32 +35,32 @@ use webull::{WebullClient, models::*, error::Result};
 async fn main() -> Result<()> {
     // Create paper trading client
     let mut client = WebullClient::new_paper(Some(6))?; // 6 = US region
-    
+
     // Or create live trading client
     // let mut client = WebullClient::new_live(Some(6))?;
-    
+
     // Login
     client.login("email@example.com", "password", None, None, None, None).await?;
-    
+
     // Get account info
     let account = client.get_account().await?;
     if let Some(net_liquidation) = account.net_liquidation {
         println!("Account balance: ${:.2}", net_liquidation);
     }
-    
+
     // Find ticker
     let tickers = client.find_ticker("AAPL").await?;
     if let Some(ticker) = tickers.first() {
         // Get quotes
         let quote = client.get_quotes(&ticker.ticker_id.to_string()).await?;
         println!("AAPL price: ${}", quote.close);
-        
+
         // IMPORTANT: Live trading requires a trade token before placing orders
         // Paper trading does NOT require a trade token
         if !client.is_paper() {
             client.get_trade_token("your_trading_pin").await?;  // 6-digit PIN
         }
-        
+
         let order = PlaceOrderRequest {
             ticker_id: ticker.ticker_id,
             action: OrderAction::Buy,
@@ -77,11 +73,11 @@ async fn main() -> Result<()> {
             serial_id: None,
             combo_type: None,
         };
-        
+
         let order_id = client.place_order(&order).await?;
         println!("Order placed: {}", order_id);
     }
-    
+
     Ok(())
 }
 ```
@@ -98,7 +94,7 @@ let mut live_client = LiveWebullClient::new(Some(6))?;
 live_client.login("email", "password", None, None, None, None).await?;
 live_client.get_trade_token("123456").await?;  // Your 6-digit trading PIN - Required for placing orders!
 
-// For paper trading  
+// For paper trading
 let mut paper_client = PaperWebullClient::new(Some(6))?;
 paper_client.login("email", "password", None, None, None, None).await?;
 // No trade token needed for paper trading
@@ -168,6 +164,7 @@ cargo run --example paper_trading
 ## Important: Live Trading Requirements
 
 ### Trade Token
+
 **Live trading requires obtaining a trade token before placing any orders.** This is a security measure that requires your 6-digit trading PIN (NOT your login password).
 
 ```rust
@@ -190,10 +187,10 @@ Paper trading does **NOT** require a trade token - you can place orders immediat
 // Get open orders
 let orders = client.get_orders(None).await?;
 for order in orders {
-    println!("Order {}: {} {} shares of {} at ${:.2}", 
-        order.order_id, 
-        order.action, 
-        order.quantity, 
+    println!("Order {}: {} {} shares of {} at ${:.2}",
+        order.order_id,
+        order.action,
+        order.quantity,
         order.ticker.symbol,
         order.limit_price.unwrap_or(0.0)
     );
@@ -216,6 +213,7 @@ for order in orders {
 ## API Coverage
 
 ### Account Management
+
 - [x] Login/Logout
 - [x] MFA support
 - [x] Get account details
@@ -224,6 +222,7 @@ for order in orders {
 - [x] Get account activities
 
 ### Trading
+
 - [x] Place orders (stocks)
 - [x] Cancel orders
 - [x] Modify orders
@@ -231,20 +230,21 @@ for order in orders {
 - [x] OTOCO orders
 
 ### Market Data
+
 - [x] Get quotes
 - [x] Get bars/candles
-- [x] Get options chains
 - [x] Get Level 2 data
 - [x] Search tickers
 
 ### Streaming
+
 - [x] Real-time quotes
 - [x] Order updates
 - [x] Trade executions
 - [x] Level 2 updates
 
 ### Analysis
-- [x] Get fundamentals
+
 - [x] Get news
 - [x] Get analyst ratings
 - [x] Screener
