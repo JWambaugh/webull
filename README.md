@@ -33,7 +33,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-webull = "1.1.0"
+webull = "1.1.1"
 ```
 
 ## Quick Start
