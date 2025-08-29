@@ -12,10 +12,12 @@ async fn main() -> Result<()> {
 
     println!("Logging in to paper trading account...");
     let mut client = WebullClient::new_paper(Some(6))?;
-    client.login(&username, &password, None, None, None, None).await?;
-    
+    client
+        .login(&username, &password, None, None, None, None)
+        .await?;
+
     println!("Login successful!");
-    
+
     // Get current orders
     println!("\nFetching current open orders...");
     match client.get_orders(None).await {
@@ -27,21 +29,23 @@ async fn main() -> Result<()> {
                 for (i, order) in orders.iter().enumerate() {
                     println!("\n--- Order {} ---", i + 1);
                     println!("  Order ID: {}", order.order_id);
-                    let symbol = order.ticker.as_ref()
+                    let symbol = order
+                        .ticker
+                        .as_ref()
                         .map(|t| t.symbol.as_str())
                         .unwrap_or("Unknown");
                     println!("  Symbol: {}", symbol);
                     println!("  Action: {:?}", order.action);
                     println!("  Order Type: {:?}", order.order_type);
                     println!("  Status: {:?}", order.status);
-                    
+
                     println!("  Quantity: {}", order.quantity);
                     println!("  Filled: {}", order.filled_quantity);
-                    
+
                     if let Some(price) = order.limit_price {
                         println!("  Limit Price: ${:.2}", price);
                     }
-                    
+
                     if let Some(avg_price) = order.avg_fill_price {
                         println!("  Avg Fill Price: ${:.2}", avg_price);
                     }
@@ -52,18 +56,21 @@ async fn main() -> Result<()> {
             println!("Error fetching orders: {:?}", e);
         }
     }
-    
+
     // Also try to get historical orders
     println!("\n\nFetching historical orders...");
     match client.get_history_orders("All", 10).await {
         Ok(history) => {
-            println!("Historical orders response: {}", 
-                serde_json::to_string_pretty(&history).unwrap_or_else(|_| "Failed to format".to_string()));
+            println!(
+                "Historical orders response: {}",
+                serde_json::to_string_pretty(&history)
+                    .unwrap_or_else(|_| "Failed to format".to_string())
+            );
         }
         Err(e) => {
             println!("Error fetching historical orders: {:?}", e);
         }
     }
-    
+
     Ok(())
 }

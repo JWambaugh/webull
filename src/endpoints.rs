@@ -31,7 +31,8 @@ impl Default for Endpoints {
             base_user_url: "https://userapi.webull.com/api".to_string(),
             base_userbroker_url: "https://userapi.webullbroker.com/api".to_string(),
             base_ustrade_url: "https://ustrade.webullfinance.com/api".to_string(),
-            base_paperfintech_url: "https://act.webullfintech.com/webull-paper-center/api".to_string(),
+            base_paperfintech_url: "https://act.webullfintech.com/webull-paper-center/api"
+                .to_string(),
             base_fintech_gw_url: "https://quotes-gw.webullfintech.com/api".to_string(),
             base_userfintech_url: "https://u1suser.webullfintech.com/api".to_string(),
             base_new_trade_url: "https://trade.webullfintech.com/api".to_string(),
@@ -55,10 +56,19 @@ impl Endpoints {
     }
 
     pub fn account_activities(&self, account_id: &str) -> String {
-        format!("{}/trade/v2/funds/{}/activities", self.base_ustrade_url, account_id)
+        format!(
+            "{}/trade/v2/funds/{}/activities",
+            self.base_ustrade_url, account_id
+        )
     }
 
-    pub fn active_gainers_losers(&self, direction: &str, region_code: i32, rank_type: &str, num: i32) -> String {
+    pub fn active_gainers_losers(
+        &self,
+        direction: &str,
+        region_code: i32,
+        rank_type: &str,
+        num: i32,
+    ) -> String {
         let url = match direction {
             "gainer" => "topGainers",
             "loser" => "dropGainers",
@@ -71,19 +81,31 @@ impl Endpoints {
     }
 
     pub fn add_alert(&self) -> String {
-        format!("{}/user/warning/v2/manage/overlap", self.base_userbroker_url)
+        format!(
+            "{}/user/warning/v2/manage/overlap",
+            self.base_userbroker_url
+        )
     }
 
     pub fn analysis(&self, stock: &str) -> String {
-        format!("{}/securities/ticker/v5/analysis/{}", self.base_securities_url, stock)
+        format!(
+            "{}/securities/ticker/v5/analysis/{}",
+            self.base_securities_url, stock
+        )
     }
 
     pub fn analysis_shortinterest(&self, stock: &str) -> String {
-        format!("{}/securities/stock/{}/shortInterest", self.base_securities_url, stock)
+        format!(
+            "{}/securities/stock/{}/shortInterest",
+            self.base_securities_url, stock
+        )
     }
 
     pub fn analysis_institutional_holding(&self, stock: &str) -> String {
-        format!("{}/securities/stock/v5/{}/institutionalHolding", self.base_securities_url, stock)
+        format!(
+            "{}/securities/stock/v5/{}/institutionalHolding",
+            self.base_securities_url, stock
+        )
     }
 
     pub fn analysis_etf_holding(&self, stock: &str, has_num: i32, page_size: i32) -> String {
@@ -101,7 +123,9 @@ impl Endpoints {
     }
 
     pub fn bars(&self, stock: &str, interval: &str, count: i32, timestamp: Option<i64>) -> String {
-        let ts = timestamp.map(|t| format!("&timestamp={}", t)).unwrap_or_default();
+        let ts = timestamp
+            .map(|t| format!("&timestamp={}", t))
+            .unwrap_or_default();
         format!(
             "{}/quote/charts/query?tickerIds={}&type={}&count={}{}",
             self.base_fintech_gw_url, stock, interval, count, ts
@@ -109,39 +133,66 @@ impl Endpoints {
     }
 
     pub fn bars_crypto(&self, stock: &str) -> String {
-        format!("{}/crypto/charts/query?tickerIds={}", self.base_fintech_gw_url, stock)
+        format!(
+            "{}/crypto/charts/query?tickerIds={}",
+            self.base_fintech_gw_url, stock
+        )
     }
 
     pub fn cancel_order(&self, account_id: &str) -> String {
-        format!("{}/trade/order/{}/cancelStockOrder/", self.base_ustrade_url, account_id)
+        format!(
+            "{}/trade/order/{}/cancelStockOrder/",
+            self.base_ustrade_url, account_id
+        )
     }
 
     pub fn modify_otoco_orders(&self, account_id: &str) -> String {
-        format!("{}/trade/v2/corder/stock/modify/{}", self.base_ustrade_url, account_id)
+        format!(
+            "{}/trade/v2/corder/stock/modify/{}",
+            self.base_ustrade_url, account_id
+        )
     }
 
     pub fn cancel_otoco_orders(&self, account_id: &str, combo_id: &str) -> String {
-        format!("{}/trade/v2/corder/stock/cancel/{}/{}", self.base_ustrade_url, account_id, combo_id)
+        format!(
+            "{}/trade/v2/corder/stock/cancel/{}/{}",
+            self.base_ustrade_url, account_id, combo_id
+        )
     }
 
     pub fn check_otoco_orders(&self, account_id: &str) -> String {
-        format!("{}/trade/v2/corder/stock/check/{}", self.base_ustrade_url, account_id)
+        format!(
+            "{}/trade/v2/corder/stock/check/{}",
+            self.base_ustrade_url, account_id
+        )
     }
 
     pub fn place_otoco_orders(&self, account_id: &str) -> String {
-        format!("{}/trade/v2/corder/stock/place/{}", self.base_ustrade_url, account_id)
+        format!(
+            "{}/trade/v2/corder/stock/place/{}",
+            self.base_ustrade_url, account_id
+        )
     }
 
     pub fn dividends(&self, account_id: &str) -> String {
-        format!("{}/v2/account/{}/dividends?direct=in", self.base_trade_url, account_id)
+        format!(
+            "{}/v2/account/{}/dividends?direct=in",
+            self.base_trade_url, account_id
+        )
     }
 
     pub fn fundamentals(&self, stock: &str) -> String {
-        format!("{}/securities/financial/index/{}", self.base_securities_url, stock)
+        format!(
+            "{}/securities/financial/index/{}",
+            self.base_securities_url, stock
+        )
     }
 
     pub fn is_tradable(&self, stock: &str) -> String {
-        format!("{}/ticker/broker/permissionV2?tickerId={}", self.base_trade_url, stock)
+        format!(
+            "{}/ticker/broker/permissionV2?tickerId={}",
+            self.base_trade_url, stock
+        )
     }
 
     pub fn list_alerts(&self) -> String {
@@ -157,10 +208,21 @@ impl Endpoints {
     }
 
     pub fn check_mfa(&self) -> String {
-        format!("{}/user/v1/verificationCode/checkCode", self.base_userfintech_url)
+        format!(
+            "{}/user/v1/verificationCode/checkCode",
+            self.base_userfintech_url
+        )
     }
 
-    pub fn get_security(&self, username: &str, account_type: i32, region_code: i32, event: &str, time: i64, url_type: i32) -> String {
+    pub fn get_security(
+        &self,
+        username: &str,
+        account_type: i32,
+        region_code: i32,
+        event: &str,
+        time: i64,
+        url_type: i32,
+    ) -> String {
         let url = if url_type == 1 {
             "getPrivacyQuestion"
         } else {
@@ -172,7 +234,15 @@ impl Endpoints {
         )
     }
 
-    pub fn next_security(&self, username: &str, account_type: i32, region_code: i32, event: &str, time: i64, url_type: i32) -> String {
+    pub fn next_security(
+        &self,
+        username: &str,
+        account_type: i32,
+        region_code: i32,
+        event: &str,
+        time: i64,
+        url_type: i32,
+    ) -> String {
         let url = if url_type == 1 {
             "nextPrivacyQuestion"
         } else {
@@ -216,7 +286,10 @@ impl Endpoints {
     }
 
     pub fn options_bars(&self, derivative_id: &str) -> String {
-        format!("{}/quote/option/chart/query?derivativeId={}", self.base_options_gw_url, derivative_id)
+        format!(
+            "{}/quote/option/chart/query?derivativeId={}",
+            self.base_options_gw_url, derivative_id
+        )
     }
 
     pub fn orders(&self, account_id: &str, page_size: i32) -> String {
@@ -227,7 +300,10 @@ impl Endpoints {
     }
 
     pub fn history(&self, account_id: &str) -> String {
-        format!("{}/trading/v1/webull/order/list?secAccountId={}", self.base_ustrade_url, account_id)
+        format!(
+            "{}/trading/v1/webull/order/list?secAccountId={}",
+            self.base_ustrade_url, account_id
+        )
     }
 
     pub fn paper_orders(&self, paper_account_id: &str, page_size: i32) -> String {
@@ -238,7 +314,10 @@ impl Endpoints {
     }
 
     pub fn paper_account(&self, paper_account_id: &str) -> String {
-        format!("{}/paper/1/acc/{}", self.base_paperfintech_url, paper_account_id)
+        format!(
+            "{}/paper/1/acc/{}",
+            self.base_paperfintech_url, paper_account_id
+        )
     }
 
     pub fn paper_account_id(&self) -> String {
@@ -246,31 +325,52 @@ impl Endpoints {
     }
 
     pub fn paper_cancel_order(&self, paper_account_id: &str, order_id: &str) -> String {
-        format!("{}/paper/1/acc/{}/orderop/cancel/{}", self.base_paper_url, paper_account_id, order_id)
+        format!(
+            "{}/paper/1/acc/{}/orderop/cancel/{}",
+            self.base_paper_url, paper_account_id, order_id
+        )
     }
 
     pub fn paper_modify_order(&self, paper_account_id: &str, order_id: &str) -> String {
-        format!("{}/paper/1/acc/{}/orderop/modify/{}", self.base_paper_url, paper_account_id, order_id)
+        format!(
+            "{}/paper/1/acc/{}/orderop/modify/{}",
+            self.base_paper_url, paper_account_id, order_id
+        )
     }
 
     pub fn paper_place_order(&self, paper_account_id: &str, stock: &str) -> String {
-        format!("{}/paper/1/acc/{}/orderop/place/{}", self.base_paper_url, paper_account_id, stock)
+        format!(
+            "{}/paper/1/acc/{}/orderop/place/{}",
+            self.base_paper_url, paper_account_id, stock
+        )
     }
 
     pub fn place_option_orders(&self, account_id: &str) -> String {
-        format!("{}/trade/v2/option/placeOrder/{}", self.base_ustrade_url, account_id)
+        format!(
+            "{}/trade/v2/option/placeOrder/{}",
+            self.base_ustrade_url, account_id
+        )
     }
 
     pub fn place_orders(&self, account_id: &str) -> String {
-        format!("{}/trade/order/{}/placeStockOrder", self.base_ustrade_url, account_id)
+        format!(
+            "{}/trade/order/{}/placeStockOrder",
+            self.base_ustrade_url, account_id
+        )
     }
 
     pub fn modify_order(&self, account_id: &str, _order_id: &str) -> String {
-        format!("{}/trading/v1/webull/order/stockOrderModify?secAccountId={}", self.base_ustrade_url, account_id)
+        format!(
+            "{}/trading/v1/webull/order/stockOrderModify?secAccountId={}",
+            self.base_ustrade_url, account_id
+        )
     }
 
     pub fn quotes(&self, stock: &str) -> String {
-        format!("{}/quotes/ticker/getTickerRealTime?tickerId={}&includeSecu=1&includeQuote=1", self.base_options_gw_url, stock)
+        format!(
+            "{}/quotes/ticker/getTickerRealTime?tickerId={}&includeSecu=1&includeQuote=1",
+            self.base_options_gw_url, stock
+        )
     }
 
     pub fn rankings(&self) -> String {
@@ -278,23 +378,38 @@ impl Endpoints {
     }
 
     pub fn refresh_login(&self, refresh_token: &str) -> String {
-        format!("{}/passport/refreshToken?refreshToken={}", self.base_user_url, refresh_token)
+        format!(
+            "{}/passport/refreshToken?refreshToken={}",
+            self.base_user_url, refresh_token
+        )
     }
 
     pub fn remove_alert(&self) -> String {
-        format!("{}/user/warning/v2/manage/overlap", self.base_userbroker_url)
+        format!(
+            "{}/user/warning/v2/manage/overlap",
+            self.base_userbroker_url
+        )
     }
 
     pub fn replace_option_orders(&self, account_id: &str) -> String {
-        format!("{}/v2/option/replaceOrder/{}", self.base_trade_url, account_id)
+        format!(
+            "{}/v2/option/replaceOrder/{}",
+            self.base_trade_url, account_id
+        )
     }
 
     pub fn stock_detail(&self, stock: &str) -> String {
-        format!("{}/stock/tickerRealTime/getQuote?tickerId={}&includeSecu=1&includeQuote=1&more=1", self.base_fintech_gw_url, stock)
+        format!(
+            "{}/stock/tickerRealTime/getQuote?tickerId={}&includeSecu=1&includeQuote=1&more=1",
+            self.base_fintech_gw_url, stock
+        )
     }
 
     pub fn stock_id(&self, stock: &str, region_code: i32) -> String {
-        format!("{}/search/pc/tickers?keyword={}&pageIndex=1&pageSize=20&regionId={}", self.base_options_gw_url, stock, region_code)
+        format!(
+            "{}/search/pc/tickers?keyword={}&pageIndex=1&pageSize=20&regionId={}",
+            self.base_options_gw_url, stock, region_code
+        )
     }
 
     pub fn trade_token(&self) -> String {
@@ -310,11 +425,17 @@ impl Endpoints {
     }
 
     pub fn social_posts(&self, topic: &str, num: i32) -> String {
-        format!("{}/social/feed/topic/{}/posts?size={}", self.base_user_url, topic, num)
+        format!(
+            "{}/social/feed/topic/{}/posts?size={}",
+            self.base_user_url, topic, num
+        )
     }
 
     pub fn social_home(&self, topic: &str, num: i32) -> String {
-        format!("{}/social/feed/topic/{}/home?size={}", self.base_user_url, topic, num)
+        format!(
+            "{}/social/feed/topic/{}/home?size={}",
+            self.base_user_url, topic, num
+        )
     }
 
     pub fn portfolio_lists(&self) -> String {
@@ -322,14 +443,23 @@ impl Endpoints {
     }
 
     pub fn press_releases(&self, stock: &str, type_ids: Option<&str>, num: i32) -> String {
-        let type_ids_string = type_ids.map(|t| format!("&typeIds={}", t)).unwrap_or_default();
+        let type_ids_string = type_ids
+            .map(|t| format!("&typeIds={}", t))
+            .unwrap_or_default();
         format!(
             "{}/securities/announcement/{}/list?lastAnnouncementId=0&limit={}{}&options=2",
             self.base_securitiesfintech_url, stock, num, type_ids_string
         )
     }
 
-    pub fn calendar_events(&self, event: &str, region_code: i32, start_date: &str, page: i32, num: i32) -> String {
+    pub fn calendar_events(
+        &self,
+        event: &str,
+        region_code: i32,
+        start_date: &str,
+        page: i32,
+        num: i32,
+    ) -> String {
         format!(
             "{}/bgw/explore/calendar/{}?regionId={}&pageIndex={}&pageSize={}&startDate={}",
             self.base_fintech_gw_url, event, region_code, page, num, start_date

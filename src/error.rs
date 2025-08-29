@@ -34,6 +34,9 @@ pub enum WebullError {
     #[error("Invalid parameter: {0}")]
     InvalidParameter(String),
 
+    #[error("Invalid request: {0}")]
+    InvalidRequest(String),
+
     #[error("API error: {0}")]
     ApiError(String),
 

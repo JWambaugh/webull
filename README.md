@@ -43,7 +43,7 @@ webull = "1.0.0"
 The library provides a unified `WebullClient` enum that can work with both live and paper trading:
 
 ```rust
-use webull_unofficial::{WebullClient, models::*, error::Result};
+use webull_unofficial::{WebullClient, PlaceOrderRequest, LoginRequestBuilder, models::*, error::Result};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -53,8 +53,16 @@ async fn main() -> Result<()> {
     // Or create live trading client
     // let mut client = WebullClient::new_live(Some(6))?;
 
-    // Login
+    // Login - multiple options available:
+    // Option 1: Original API (still supported)
     client.login("email@example.com", "password", None, None, None, None).await?;
+
+    // Option 2: Fluent builder API (NEW - recommended)
+    // client.login_with()
+    //     .username("email@example.com")
+    //     .password("password")
+    //     .await?;
+
 
     // Get account info
     let account = client.get_account().await?;
@@ -75,20 +83,14 @@ async fn main() -> Result<()> {
             client.get_trade_token("your_trading_pin").await?;  // 6-digit PIN
         }
 
-        let order = PlaceOrderRequest {
-            ticker_id: ticker.ticker_id,
-            action: OrderAction::Buy,
-            order_type: OrderType::Limit,
-            time_in_force: TimeInForce::Day,
-            quantity: 1.0,
-            limit_price: Some(150.0),
-            stop_price: None,
-            outside_regular_trading_hour: false,
-            serial_id: None,
-            combo_type: None,
-        };
-
-        let order_id = client.place_order(&order).await?;
+        // Place order using NEW auto-detect syntax - type detected from parameters
+        let order_id = client.place_order_with()
+            .ticker_id(ticker.ticker_id)
+            .limit(150.0)  // Auto-detects as LIMIT order
+            .buy()
+            .quantity(1.0)
+            .time_in_force(TimeInForce::Day)
+            .await?;
         println!("Order placed: {}", order_id);
     }
 
@@ -123,6 +125,172 @@ The library is organized into three main client types:
 3. **`PaperWebullClient`** - Implementation for paper (simulated) trading
 
 The unified `WebullClient` enum automatically delegates method calls to the appropriate underlying implementation, making it easy to switch between live and paper trading modes.
+
+## API Options
+
+The library supports both traditional function calls and modern fluent builder patterns:
+
+### Traditional API (Original - Still Fully Supported)
+
+```rust
+// Direct method calls with parameters
+client.login("email", "password", None, None, None, None).await?;
+client.get_bars("913256135", "5m", 100, None).await?;
+client.get_news("AAPL", 0, 20).await?;
+```
+
+### Fluent Builder API (New - Recommended)
+
+```rust
+// Fluent builders that can be awaited directly
+client.login_with()
+    .username("email")
+    .password("password")
+    .mfa("123456")  // Optional
+    .await?;
+
+let bars = client.get_bars_with()
+    .ticker_id("913256135")
+    .interval("5m")
+    .count(100)
+    .await?;  // No build() needed!
+```
+
+## Builder Patterns
+
+The library provides fluent builder patterns for constructing complex requests:
+
+### Order Builder
+
+```rust
+// RECOMMENDED: Auto-detect order type from parameters
+let order_id = client.place_order_with()
+    .ticker_id(ticker_id)
+    .limit(150.0)  // Automatically detects LIMIT order
+    .buy()
+    .quantity(10.0)
+    .await?;
+
+// Stop-limit with auto-detection (both prices set)
+let order_id = client.place_order_with()
+    .ticker_id(ticker_id)
+    .limit(144.0)  // Both prices = STOP-LIMIT
+    .stop(145.0)   // order automatically!
+    .sell()
+    .quantity(10.0)
+    .await?;
+
+// Also supported: Explicit order type methods
+let order_id = client.place_limit_order_with(150.0)
+    .ticker_id(ticker_id)
+    .sell()
+    .quantity(5.0)
+    .extended_hours()
+    .time_in_force(TimeInForce::GoodTillCancel)
+    .await?;
+
+// Traditional builder pattern (still supported)
+let order = PlaceOrderRequest::market()
+    .ticker_id(ticker_id)
+    .buy()
+    .quantity(10.0)
+    .build()?;
+let order_id = client.place_order(&order).await?;
+```
+
+### News Builder (Fluent API)
+
+```rust
+// Get latest news - directly await the builder!
+let news = client.get_news_with()
+    .ticker("AAPL")
+    .latest(20)
+    .await?;
+
+// Paginate through news
+let more_news = client.get_news_with()
+    .ticker("AAPL")
+    .after(last_news_id)
+    .count(10)
+    .await?;
+```
+
+### Bars/Candles Builder (Fluent API)
+
+```rust
+// Get historical bars - no build() needed!
+let bars = client.get_bars_with()
+    .ticker_id("913256135")
+    .interval("5m")
+    .count(100)
+    .from_date(chrono::Utc::now() - chrono::Duration::days(7))
+    .await?;
+```
+
+### Options Builder (Fluent API)
+
+```rust
+// Get options near the money
+let options = client.get_options_with()
+    .ticker("AAPL")
+    .calls_only()
+    .near_the_money(current_price, 10.0) // Within 10% of current price
+    .await?;
+```
+
+### Order Builders (Fluent API)
+
+```rust
+// NEW: Automatic order type detection!
+// The order type is automatically detected based on which parameters you set:
+
+// Market order (no prices specified)
+let order_id = client.place_order_with()
+    .ticker_id(ticker_id)
+    .buy()
+    .quantity(10.0)
+    .await?;
+
+// Limit order (limit price only)
+let order_id = client.place_order_with()
+    .ticker_id(ticker_id)
+    .limit(150.0)  // Auto-detects as LIMIT order
+    .buy()
+    .quantity(10.0)
+    .await?;
+
+// Stop order (stop price only)
+let order_id = client.place_order_with()
+    .ticker_id(ticker_id)
+    .stop(145.0)   // Auto-detects as STOP order
+    .sell()
+    .quantity(10.0)
+    .await?;
+
+// Stop-Limit order (both prices)
+let order_id = client.place_order_with()
+    .ticker_id(ticker_id)
+    .limit(144.0)  // Auto-detects as STOP-LIMIT order
+    .stop(145.0)   // when both prices are set
+    .sell()
+    .quantity(10.0)
+    .await?;
+
+// You can still use explicit order type methods if preferred:
+let order_id = client.place_market_order_with()
+    .ticker_id(ticker_id)
+    .buy()
+    .quantity(10.0)
+    .await?;
+
+let order_id = client.place_limit_order_with(150.0)
+    .ticker_id(ticker_id)
+    .sell()
+    .quantity(5.0)
+    .extended_hours()
+    .time_in_force(TimeInForce::GoodTillCancel)
+    .await?;
+```
 
 ## Streaming Example
 

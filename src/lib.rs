@@ -1,16 +1,21 @@
+pub mod builders;
 pub mod client;
-pub mod live_client;
-pub mod paper_client;
-pub mod unified_client;
 pub mod endpoints;
-pub mod stream;
 pub mod error;
+pub mod live_client;
 pub mod models;
+pub mod paper_client;
+pub mod stream;
+pub mod unified_client;
 pub mod utils;
 
-pub use client::{WebullClient, LiveWebullClient, PaperWebullClient};
+pub use client::{LiveWebullClient, PaperWebullClient, WebullClient};
+pub use error::{Result, WebullError};
+pub use models::{
+    BarsRequestBuilder, LoginRequestBuilder, NewsRequestBuilder, OptionsRequestBuilder,
+    PlaceOrderRequest, PlaceOrderRequestBuilder, ScreenerRequestBuilder,
+};
 pub use stream::StreamConn;
-pub use error::{WebullError, Result};
 
 #[cfg(test)]
 mod tests;

@@ -1,9 +1,9 @@
+use crate::error::{Result, WebullError};
+use base64::{engine::general_purpose, Engine as _};
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
-use base64::{Engine as _, engine::general_purpose};
-use crate::error::{Result, WebullError};
 
 /// Generate or load a device ID from file
 pub fn get_did(path: Option<&Path>) -> Result<String> {
@@ -17,14 +17,13 @@ pub fn get_did(path: Option<&Path>) -> Result<String> {
         let mut file = File::open(&filename)?;
         let mut contents = Vec::new();
         file.read_to_end(&mut contents)?;
-        
+
         // Try to deserialize with bincode
         match bincode::deserialize::<String>(&contents) {
             Ok(did) => Ok(did),
             Err(_) => {
                 // Fallback: treat as raw string
-                String::from_utf8(contents)
-                    .map_err(|e| WebullError::DeviceIdError(e.to_string()))
+                String::from_utf8(contents).map_err(|e| WebullError::DeviceIdError(e.to_string()))
             }
         }
     } else {
@@ -47,9 +46,9 @@ pub fn save_did(did: &str, path: Option<&Path>) -> Result<()> {
         fs::create_dir_all(parent)?;
     }
 
-    let serialized = bincode::serialize(did)
-        .map_err(|e| WebullError::SerializationError(e.to_string()))?;
-    
+    let serialized =
+        bincode::serialize(did).map_err(|e| WebullError::SerializationError(e.to_string()))?;
+
     let mut file = File::create(&filename)?;
     file.write_all(&serialized)?;
     Ok(())
@@ -68,15 +67,17 @@ pub fn get_account_type(username: &str) -> Result<i32> {
         if validate_email(username) {
             return Ok(2); // Email account
         } else {
-            return Err(WebullError::InvalidParameter("Invalid email format".to_string()));
+            return Err(WebullError::InvalidParameter(
+                "Invalid email format".to_string(),
+            ));
         }
     }
-    
+
     // Check if it's a phone number
     if username.starts_with('+') {
         return Ok(1); // Phone account
     }
-    
+
     // Default to email type if no clear indicator
     Ok(2)
 }
@@ -87,21 +88,20 @@ pub fn validate_email(email: &str) -> bool {
     if parts.len() != 2 {
         return false;
     }
-    
+
     let domain_parts: Vec<&str> = parts[1].split('.').collect();
     if domain_parts.len() < 2 {
         return false;
     }
-    
+
     // Basic checks
-    !parts[0].is_empty() && 
-    domain_parts.iter().all(|p| !p.is_empty())
+    !parts[0].is_empty() && domain_parts.iter().all(|p| !p.is_empty())
 }
 
 /// Convert timestamp to human-readable format
 pub fn timestamp_to_string(timestamp: i64) -> String {
     use chrono::DateTime;
-    
+
     let datetime = DateTime::from_timestamp(timestamp / 1000, 0)
         .unwrap_or_else(|| DateTime::from_timestamp(0, 0).unwrap());
     datetime.format("%Y-%m-%d %H:%M:%S").to_string()
@@ -110,17 +110,17 @@ pub fn timestamp_to_string(timestamp: i64) -> String {
 /// Parse time interval string (e.g., "1m", "5m", "1h", "1d")
 pub fn parse_interval(interval: &str) -> Result<String> {
     let valid_intervals = vec![
-        "1m", "3m", "5m", "15m", "30m", "60m", "120m", "240m",
-        "1h", "2h", "4h", 
-        "1d", "1w", "1M",
-        "d1", "d5", "m1", "m5", "m15", "m30", "m60", "m120", "m240",
-        "h1", "h2", "h4", "w1", "mo1"
+        "1m", "3m", "5m", "15m", "30m", "60m", "120m", "240m", "1h", "2h", "4h", "1d", "1w", "1M",
+        "d1", "d5", "m1", "m5", "m15", "m30", "m60", "m120", "m240", "h1", "h2", "h4", "w1", "mo1",
     ];
-    
+
     if valid_intervals.contains(&interval) {
         Ok(interval.to_string())
     } else {
-        Err(WebullError::InvalidParameter(format!("Invalid interval: {}", interval)))
+        Err(WebullError::InvalidParameter(format!(
+            "Invalid interval: {}",
+            interval
+        )))
     }
 }
 
@@ -151,7 +151,8 @@ pub fn base64_encode(data: &[u8]) -> String {
 
 /// Base64 decode
 pub fn base64_decode(encoded: &str) -> Result<Vec<u8>> {
-    general_purpose::STANDARD.decode(encoded)
+    general_purpose::STANDARD
+        .decode(encoded)
         .map_err(|e| WebullError::SerializationError(e.to_string()))
 }
 

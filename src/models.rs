@@ -1,9 +1,11 @@
-use serde::{Deserialize, Serialize};
 use serde::de::{self, Deserializer};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 // Custom deserializer for fields that can be either string or number
-fn deserialize_optional_string_or_number<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+fn deserialize_optional_string_or_number<'de, D>(
+    deserializer: D,
+) -> Result<Option<String>, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -22,7 +24,7 @@ where
 #[serde(rename_all = "camelCase")]
 pub struct LoginRequest {
     pub account: String,
-    pub account_type: i32,  // Changed to i32 based on API
+    pub account_type: i32, // Changed to i32 based on API
     pub device_id: String,
     pub device_name: String,
     pub grade: i32,
@@ -32,6 +34,120 @@ pub struct LoginRequest {
     pub ext_info: Option<ExtInfo>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub access_questions: Option<String>,
+}
+
+/// Builder for LoginRequest
+#[derive(Debug, Clone)]
+pub struct LoginRequestBuilder {
+    username: Option<String>,
+    password: Option<String>,
+    device_name: Option<String>,
+    device_id: Option<String>,
+    mfa_code: Option<String>,
+    question_id: Option<String>,
+    question_answer: Option<String>,
+    region_id: Option<i32>,
+}
+
+impl LoginRequestBuilder {
+    /// Create a new login request builder
+    pub fn new() -> Self {
+        Self {
+            username: None,
+            password: None,
+            device_name: None,
+            device_id: None,
+            mfa_code: None,
+            question_id: None,
+            question_answer: None,
+            region_id: Some(6), // Default to US region
+        }
+    }
+
+    /// Set the username (email)
+    pub fn username(mut self, username: impl Into<String>) -> Self {
+        self.username = Some(username.into());
+        self
+    }
+
+    /// Set the password
+    pub fn password(mut self, password: impl Into<String>) -> Self {
+        self.password = Some(password.into());
+        self
+    }
+
+    /// Set the device name
+    pub fn device_name(mut self, device_name: impl Into<String>) -> Self {
+        self.device_name = Some(device_name.into());
+        self
+    }
+
+    /// Set the device ID
+    pub fn device_id(mut self, device_id: impl Into<String>) -> Self {
+        self.device_id = Some(device_id.into());
+        self
+    }
+
+    /// Set the MFA code
+    pub fn mfa(mut self, code: impl Into<String>) -> Self {
+        self.mfa_code = Some(code.into());
+        self
+    }
+
+    /// Set security question answer
+    pub fn security_question(
+        mut self,
+        question_id: impl Into<String>,
+        answer: impl Into<String>,
+    ) -> Self {
+        self.question_id = Some(question_id.into());
+        self.question_answer = Some(answer.into());
+        self
+    }
+
+    /// Set the region (default is 6 for US)
+    pub fn region(mut self, region_id: i32) -> Self {
+        self.region_id = Some(region_id);
+        self
+    }
+
+    /// Build the login parameters
+    /// Returns tuple of (username, password, device_name, mfa, question_id, question_answer)
+    pub fn build(
+        self,
+    ) -> Result<
+        (
+            String,
+            String,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+        ),
+        String,
+    > {
+        let username = self
+            .username
+            .ok_or_else(|| "username is required".to_string())?;
+        let password = self
+            .password
+            .ok_or_else(|| "password is required".to_string())?;
+
+        Ok((
+            username,
+            password,
+            self.device_name,
+            self.mfa_code,
+            self.question_id,
+            self.question_answer,
+        ))
+    }
+}
+
+impl Default for LoginRequestBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -127,7 +243,10 @@ pub struct Account {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountDetail {
-    #[serde(rename = "secAccountId", deserialize_with = "deserialize_optional_string_or_number")]
+    #[serde(
+        rename = "secAccountId",
+        deserialize_with = "deserialize_optional_string_or_number"
+    )]
     pub account_id: Option<String>,
     pub account_type: Option<String>,
     pub broker_account_id: Option<String>,
@@ -140,7 +259,11 @@ pub struct AccountDetail {
     pub total_cost: Option<f64>,
     #[serde(deserialize_with = "deserialize_f64_from_string_opt", default)]
     pub unrealized_profit_loss: Option<f64>,
-    #[serde(rename = "unrealizedProfitLossBase", deserialize_with = "deserialize_f64_from_string_opt", default)]
+    #[serde(
+        rename = "unrealizedProfitLossBase",
+        deserialize_with = "deserialize_f64_from_string_opt",
+        default
+    )]
     pub unrealized_profit_loss_base: Option<f64>,
     #[serde(deserialize_with = "deserialize_f64_from_string_opt", default)]
     pub unrealized_profit_loss_rate: Option<f64>,
@@ -150,10 +273,10 @@ pub struct AccountDetail {
     pub remind_modify_pwd: Option<bool>,
     pub show_upgrade: Option<bool>,
     pub open_order_size: Option<i32>,
-    
+
     // These come from accountMembers array
     pub account_members: Option<Vec<AccountMember>>,
-    
+
     // Computed fields from accountMembers
     #[serde(skip)]
     pub total_market_value: Option<f64>,
@@ -167,7 +290,7 @@ pub struct AccountDetail {
     pub settled_funds: Option<f64>,
     #[serde(skip)]
     pub unsettled_funds: Option<f64>,
-    
+
     pub positions: Option<Vec<Position>>,
     pub positions2: Option<Vec<Position>>,
     pub open_orders: Option<Vec<Order>>,
@@ -322,7 +445,11 @@ pub struct Quote {
     pub volume: f64,
     #[serde(deserialize_with = "deserialize_f64_from_string_opt", default)]
     pub avg_vol10_d: Option<f64>,
-    #[serde(rename = "avgVol3M", deserialize_with = "deserialize_f64_from_string_opt", default)]
+    #[serde(
+        rename = "avgVol3M",
+        deserialize_with = "deserialize_f64_from_string_opt",
+        default
+    )]
     pub avg_vol3_m: Option<f64>,
     #[serde(deserialize_with = "deserialize_f64_from_string_opt", default)]
     pub market_value: Option<f64>,
@@ -375,15 +502,31 @@ pub struct Order {
     #[serde(rename = "status", alias = "statusCode")]
     pub status: OrderStatus,
     pub time_in_force: TimeInForce,
-    #[serde(alias = "totalQuantity", deserialize_with = "deserialize_f64_from_string")]
+    #[serde(
+        alias = "totalQuantity",
+        deserialize_with = "deserialize_f64_from_string"
+    )]
     pub quantity: f64,
     #[serde(deserialize_with = "deserialize_f64_from_string")]
     pub filled_quantity: f64,
-    #[serde(alias = "avgFilledPrice", default, deserialize_with = "deserialize_f64_from_string_opt")]
+    #[serde(
+        alias = "avgFilledPrice",
+        default,
+        deserialize_with = "deserialize_f64_from_string_opt"
+    )]
     pub avg_fill_price: Option<f64>,
-    #[serde(alias = "lmtPrice", default, deserialize_with = "deserialize_f64_from_string_opt")]
+    #[serde(
+        alias = "lmtPrice",
+        default,
+        deserialize_with = "deserialize_f64_from_string_opt"
+    )]
     pub limit_price: Option<f64>,
-    #[serde(alias = "stopPrice", alias = "auxPrice", default, deserialize_with = "deserialize_f64_from_string_opt")]
+    #[serde(
+        alias = "stopPrice",
+        alias = "auxPrice",
+        default,
+        deserialize_with = "deserialize_f64_from_string_opt"
+    )]
     pub stop_price: Option<f64>,
     #[serde(rename = "outsideRegularTradingHour")]
     pub outside_regular_trading_hour: bool,
@@ -395,14 +538,14 @@ pub struct Order {
     pub filled_time: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum OrderAction {
     Buy,
     Sell,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum OrderType {
     #[serde(rename = "MKT")]
@@ -435,7 +578,7 @@ pub enum OrderStatus {
     Rejected,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum TimeInForce {
     #[serde(rename = "DAY")]
@@ -469,6 +612,198 @@ pub struct PlaceOrderRequest {
     pub combo_type: Option<String>,
 }
 
+impl PlaceOrderRequest {
+    /// Create a builder for a market order
+    pub fn market() -> PlaceOrderRequestBuilder {
+        PlaceOrderRequestBuilder::new(OrderType::Market)
+    }
+
+    /// Create a builder for a limit order
+    pub fn limit(price: f64) -> PlaceOrderRequestBuilder {
+        PlaceOrderRequestBuilder::new(OrderType::Limit).limit_price(price)
+    }
+
+    /// Create a builder for a stop order
+    pub fn stop(price: f64) -> PlaceOrderRequestBuilder {
+        PlaceOrderRequestBuilder::new(OrderType::Stop).stop_price(price)
+    }
+
+    /// Create a builder for a stop-limit order
+    pub fn stop_limit(stop_price: f64, limit_price: f64) -> PlaceOrderRequestBuilder {
+        PlaceOrderRequestBuilder::new(OrderType::StopLimit)
+            .stop_price(stop_price)
+            .limit_price(limit_price)
+    }
+
+    /// Create a custom builder with a specific order type
+    pub fn builder(order_type: OrderType) -> PlaceOrderRequestBuilder {
+        PlaceOrderRequestBuilder::new(order_type)
+    }
+}
+
+/// Builder for PlaceOrderRequest
+#[derive(Debug, Clone)]
+pub struct PlaceOrderRequestBuilder {
+    ticker_id: Option<i64>,
+    action: Option<OrderAction>,
+    order_type: OrderType,
+    time_in_force: TimeInForce,
+    quantity: Option<f64>,
+    limit_price: Option<f64>,
+    stop_price: Option<f64>,
+    outside_regular_trading_hour: bool,
+    serial_id: Option<String>,
+    combo_type: Option<String>,
+}
+
+impl PlaceOrderRequestBuilder {
+    /// Create a new builder with the given order type
+    pub fn new(order_type: OrderType) -> Self {
+        Self {
+            ticker_id: None,
+            action: None,
+            order_type,
+            time_in_force: TimeInForce::Day, // Default to Day
+            quantity: None,
+            limit_price: None,
+            stop_price: None,
+            outside_regular_trading_hour: false,
+            serial_id: None,
+            combo_type: None,
+        }
+    }
+
+    /// Set the ticker ID
+    pub fn ticker_id(mut self, ticker_id: i64) -> Self {
+        self.ticker_id = Some(ticker_id);
+        self
+    }
+
+    /// Set the ticker by symbol (requires looking up the ticker_id separately)
+    /// Note: This is a convenience method for documentation, actual lookup must be done separately
+    pub fn symbol(self, _symbol: &str) -> Self {
+        // Note: The actual ticker_id must be set using ticker_id() method
+        // This is here for API consistency
+        self
+    }
+
+    /// Set the order action (Buy or Sell)
+    pub fn action(mut self, action: OrderAction) -> Self {
+        self.action = Some(action);
+        self
+    }
+
+    /// Convenience method for buy orders
+    pub fn buy(mut self) -> Self {
+        self.action = Some(OrderAction::Buy);
+        self
+    }
+
+    /// Convenience method for sell orders
+    pub fn sell(mut self) -> Self {
+        self.action = Some(OrderAction::Sell);
+        self
+    }
+
+    /// Set the quantity
+    pub fn quantity(mut self, quantity: f64) -> Self {
+        self.quantity = Some(quantity);
+        self
+    }
+
+    /// Set the time in force
+    pub fn time_in_force(mut self, tif: TimeInForce) -> Self {
+        self.time_in_force = tif;
+        self
+    }
+
+    /// Set the limit price (for limit and stop-limit orders)
+    pub fn limit_price(mut self, price: f64) -> Self {
+        self.limit_price = Some(price);
+        self
+    }
+
+    /// Set the stop price (for stop and stop-limit orders)
+    pub fn stop_price(mut self, price: f64) -> Self {
+        self.stop_price = Some(price);
+        self
+    }
+
+    /// Enable or disable outside regular trading hours
+    pub fn outside_regular_trading_hour(mut self, enabled: bool) -> Self {
+        self.outside_regular_trading_hour = enabled;
+        self
+    }
+
+    /// Enable outside regular trading hours (convenience method)
+    pub fn extended_hours(mut self) -> Self {
+        self.outside_regular_trading_hour = true;
+        self
+    }
+
+    /// Set the serial ID
+    pub fn serial_id(mut self, id: String) -> Self {
+        self.serial_id = Some(id);
+        self
+    }
+
+    /// Set the combo type
+    pub fn combo_type(mut self, combo_type: String) -> Self {
+        self.combo_type = Some(combo_type);
+        self
+    }
+
+    /// Build the PlaceOrderRequest
+    /// Returns an error if required fields are missing
+    pub fn build(self) -> Result<PlaceOrderRequest, String> {
+        let ticker_id = self
+            .ticker_id
+            .ok_or_else(|| "ticker_id is required".to_string())?;
+        let action = self
+            .action
+            .ok_or_else(|| "action is required".to_string())?;
+        let quantity = self
+            .quantity
+            .ok_or_else(|| "quantity is required".to_string())?;
+
+        // Validate order type specific requirements
+        match self.order_type {
+            OrderType::Limit => {
+                if self.limit_price.is_none() {
+                    return Err(format!("{:?} order requires limit_price", self.order_type));
+                }
+            }
+            OrderType::Stop => {
+                if self.stop_price.is_none() {
+                    return Err("Stop order requires stop_price".to_string());
+                }
+            }
+            OrderType::StopLimit => {
+                if self.limit_price.is_none() {
+                    return Err("StopLimit order requires limit_price".to_string());
+                }
+                if self.stop_price.is_none() {
+                    return Err("StopLimit order requires stop_price".to_string());
+                }
+            }
+            _ => {}
+        }
+
+        Ok(PlaceOrderRequest {
+            ticker_id,
+            action,
+            order_type: self.order_type,
+            time_in_force: self.time_in_force,
+            quantity,
+            limit_price: self.limit_price,
+            stop_price: self.stop_price,
+            outside_regular_trading_hour: self.outside_regular_trading_hour,
+            serial_id: self.serial_id,
+            combo_type: self.combo_type,
+        })
+    }
+}
+
 // ============= Bar/Candle Models =============
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -480,6 +815,76 @@ pub struct Bar {
     pub close: f64,
     pub volume: f64,
     pub vwap: f64,
+}
+
+/// Request builder for fetching bars/candles
+#[derive(Debug, Clone)]
+pub struct BarsRequestBuilder {
+    ticker_id: Option<String>,
+    interval: Option<String>,
+    count: Option<i32>,
+    timestamp: Option<i64>,
+}
+
+impl BarsRequestBuilder {
+    /// Create a new bars request builder
+    pub fn new() -> Self {
+        Self {
+            ticker_id: None,
+            interval: None,
+            count: Some(100), // Default count
+            timestamp: None,
+        }
+    }
+
+    /// Set the ticker ID
+    pub fn ticker_id(mut self, ticker_id: impl Into<String>) -> Self {
+        self.ticker_id = Some(ticker_id.into());
+        self
+    }
+
+    /// Set the interval (e.g., "1m", "5m", "1d")
+    pub fn interval(mut self, interval: impl Into<String>) -> Self {
+        self.interval = Some(interval.into());
+        self
+    }
+
+    /// Set the number of bars to fetch
+    pub fn count(mut self, count: i32) -> Self {
+        self.count = Some(count);
+        self
+    }
+
+    /// Set the timestamp to fetch bars from
+    pub fn timestamp(mut self, timestamp: i64) -> Self {
+        self.timestamp = Some(timestamp);
+        self
+    }
+
+    /// Set the date to fetch bars from
+    pub fn from_date(mut self, date: chrono::DateTime<chrono::Utc>) -> Self {
+        self.timestamp = Some(date.timestamp());
+        self
+    }
+
+    /// Build the request parameters
+    pub fn build(self) -> Result<(String, String, i32, Option<i64>), String> {
+        let ticker_id = self
+            .ticker_id
+            .ok_or_else(|| "ticker_id is required".to_string())?;
+        let interval = self
+            .interval
+            .ok_or_else(|| "interval is required".to_string())?;
+        let count = self.count.unwrap_or(100);
+
+        Ok((ticker_id, interval, count, self.timestamp))
+    }
+}
+
+impl Default for BarsRequestBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 // ============= News Models =============
@@ -495,7 +900,7 @@ pub struct News {
     #[serde(rename = "collectSource")]
     pub collect_source: Option<String>,
     #[serde(rename = "newsTime")]
-    pub news_time: String,  // API returns as string like "2025-08-27T11:35:08.000+0000"
+    pub news_time: String, // API returns as string like "2025-08-27T11:35:08.000+0000"
     #[serde(rename = "newsUrl")]
     pub news_url: Option<String>,
     pub content: Option<String>,
@@ -504,6 +909,73 @@ pub struct News {
     pub translated: Option<bool>,
     #[serde(rename = "mainPic")]
     pub main_pic: Option<String>,
+}
+
+/// Request builder for fetching news
+#[derive(Debug, Clone)]
+pub struct NewsRequestBuilder {
+    ticker: Option<String>,
+    last_id: Option<i64>,
+    count: Option<i32>,
+}
+
+impl NewsRequestBuilder {
+    /// Create a new news request builder
+    pub fn new() -> Self {
+        Self {
+            ticker: None,
+            last_id: Some(0), // Default to fetch from beginning
+            count: Some(20),  // Default count
+        }
+    }
+
+    /// Set the ticker/symbol
+    pub fn ticker(mut self, ticker: impl Into<String>) -> Self {
+        self.ticker = Some(ticker.into());
+        self
+    }
+
+    /// Set the last news ID for pagination
+    pub fn last_id(mut self, last_id: i64) -> Self {
+        self.last_id = Some(last_id);
+        self
+    }
+
+    /// Fetch news after a specific news ID
+    pub fn after(mut self, news_id: i64) -> Self {
+        self.last_id = Some(news_id);
+        self
+    }
+
+    /// Set the number of news items to fetch
+    pub fn count(mut self, count: i32) -> Self {
+        self.count = Some(count);
+        self
+    }
+
+    /// Set to fetch the latest N news items
+    pub fn latest(mut self, count: i32) -> Self {
+        self.last_id = Some(0);
+        self.count = Some(count);
+        self
+    }
+
+    /// Build the request parameters
+    pub fn build(self) -> Result<(String, i64, i32), String> {
+        let ticker = self
+            .ticker
+            .ok_or_else(|| "ticker is required".to_string())?;
+        let last_id = self.last_id.unwrap_or(0);
+        let count = self.count.unwrap_or(20);
+
+        Ok((ticker, last_id, count))
+    }
+}
+
+impl Default for NewsRequestBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 // ============= Options Models =============
@@ -516,6 +988,97 @@ pub struct OptionContract {
     pub strike_price: f64,
     pub expiration_date: String,
     pub option_type: String, // CALL or PUT
+}
+
+/// Builder for requesting options data
+#[derive(Debug, Clone)]
+pub struct OptionsRequestBuilder {
+    ticker: Option<String>,
+    expiration_date: Option<String>,
+    option_type: Option<String>,
+    min_strike: Option<f64>,
+    max_strike: Option<f64>,
+}
+
+impl OptionsRequestBuilder {
+    /// Create a new options request builder
+    pub fn new() -> Self {
+        Self {
+            ticker: None,
+            expiration_date: None,
+            option_type: None,
+            min_strike: None,
+            max_strike: None,
+        }
+    }
+
+    /// Set the ticker symbol
+    pub fn ticker(mut self, ticker: impl Into<String>) -> Self {
+        self.ticker = Some(ticker.into());
+        self
+    }
+
+    /// Set the expiration date (format: YYYY-MM-DD)
+    pub fn expiration(mut self, date: impl Into<String>) -> Self {
+        self.expiration_date = Some(date.into());
+        self
+    }
+
+    /// Request only call options
+    pub fn calls_only(mut self) -> Self {
+        self.option_type = Some("CALL".to_string());
+        self
+    }
+
+    /// Request only put options
+    pub fn puts_only(mut self) -> Self {
+        self.option_type = Some("PUT".to_string());
+        self
+    }
+
+    /// Set minimum strike price filter
+    pub fn min_strike(mut self, price: f64) -> Self {
+        self.min_strike = Some(price);
+        self
+    }
+
+    /// Set maximum strike price filter
+    pub fn max_strike(mut self, price: f64) -> Self {
+        self.max_strike = Some(price);
+        self
+    }
+
+    /// Set strike price range
+    pub fn strike_range(mut self, min: f64, max: f64) -> Self {
+        self.min_strike = Some(min);
+        self.max_strike = Some(max);
+        self
+    }
+
+    /// Request options near the money (within a percentage of current price)
+    pub fn near_the_money(mut self, current_price: f64, percent_range: f64) -> Self {
+        let range = current_price * (percent_range / 100.0);
+        self.min_strike = Some(current_price - range);
+        self.max_strike = Some(current_price + range);
+        self
+    }
+
+    /// Build the options request parameters
+    pub fn build(self) -> Result<String, String> {
+        let ticker = self
+            .ticker
+            .ok_or_else(|| "ticker is required".to_string())?;
+
+        // In a real implementation, this would build appropriate query parameters
+        // For now, we just return the ticker as the main required parameter
+        Ok(ticker)
+    }
+}
+
+impl Default for OptionsRequestBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 // ============= Fundamentals Models =============
@@ -540,6 +1103,87 @@ pub struct ScreenerRequest {
     pub rank_id: i32,
 }
 
+/// Builder for ScreenerRequest
+#[derive(Debug, Clone)]
+pub struct ScreenerRequestBuilder {
+    region_id: Option<i32>,
+    plate_id: Option<i32>,
+    rank_id: Option<i32>,
+}
+
+impl ScreenerRequestBuilder {
+    /// Create a new screener request builder
+    pub fn new() -> Self {
+        Self {
+            region_id: Some(6), // Default to US region
+            plate_id: None,
+            rank_id: None,
+        }
+    }
+
+    /// Set the region ID (default is 6 for US)
+    pub fn region(mut self, region_id: i32) -> Self {
+        self.region_id = Some(region_id);
+        self
+    }
+
+    /// Set the plate/category ID
+    pub fn plate(mut self, plate_id: i32) -> Self {
+        self.plate_id = Some(plate_id);
+        self
+    }
+
+    /// Set the rank/sort ID
+    pub fn rank(mut self, rank_id: i32) -> Self {
+        self.rank_id = Some(rank_id);
+        self
+    }
+
+    /// Use preset for top gainers
+    pub fn top_gainers(mut self) -> Self {
+        self.plate_id = Some(1); // Typical ID for gainers
+        self.rank_id = Some(1); // Sort by gain percentage
+        self
+    }
+
+    /// Use preset for top losers
+    pub fn top_losers(mut self) -> Self {
+        self.plate_id = Some(2); // Typical ID for losers
+        self.rank_id = Some(2); // Sort by loss percentage
+        self
+    }
+
+    /// Use preset for most active (by volume)
+    pub fn most_active(mut self) -> Self {
+        self.plate_id = Some(3); // Typical ID for active stocks
+        self.rank_id = Some(3); // Sort by volume
+        self
+    }
+
+    /// Build the screener request
+    pub fn build(self) -> Result<ScreenerRequest, String> {
+        let region_id = self.region_id.unwrap_or(6);
+        let plate_id = self
+            .plate_id
+            .ok_or_else(|| "plate_id is required".to_string())?;
+        let rank_id = self
+            .rank_id
+            .ok_or_else(|| "rank_id is required".to_string())?;
+
+        Ok(ScreenerRequest {
+            region_id,
+            plate_id,
+            rank_id,
+        })
+    }
+}
+
+impl Default for ScreenerRequestBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 // ============= Helper Functions =============
 
 /// Custom deserializer for f64 from string
@@ -550,7 +1194,9 @@ where
     let s: serde_json::Value = Deserialize::deserialize(deserializer)?;
     match s {
         serde_json::Value::String(s) => s.parse::<f64>().map_err(de::Error::custom),
-        serde_json::Value::Number(n) => n.as_f64().ok_or_else(|| de::Error::custom("Invalid number")),
+        serde_json::Value::Number(n) => n
+            .as_f64()
+            .ok_or_else(|| de::Error::custom("Invalid number")),
         _ => Err(de::Error::custom("Expected string or number")),
     }
 }

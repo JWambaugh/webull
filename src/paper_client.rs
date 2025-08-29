@@ -86,6 +86,25 @@ impl PaperWebullClient {
         Err(WebullError::AccountNotFound)
     }
 
+    /// Login using builder pattern
+    pub async fn login_with(
+        &mut self,
+        builder: crate::models::LoginRequestBuilder,
+    ) -> Result<LoginResponse> {
+        let (username, password, device_name, mfa, question_id, question_answer) = builder
+            .build()
+            .map_err(|e| WebullError::InvalidRequest(e))?;
+        self.login(
+            &username,
+            &password,
+            device_name.as_deref(),
+            mfa.as_deref(),
+            question_id.as_deref(),
+            question_answer.as_deref(),
+        )
+        .await
+    }
+
     /// Get paper account details
     pub async fn get_account(&self) -> Result<AccountDetail> {
         let paper_account_id = self
@@ -116,31 +135,34 @@ impl PaperWebullClient {
                 .and_then(|v| v.as_i64())
                 .map(|id| id.to_string())
                 .or_else(|| Some(paper_account_id.to_string())),
-            
+
             // Parse netLiquidation from string
             net_liquidation: result
                 .get("netLiquidation")
                 .and_then(|v| v.as_str())
                 .and_then(|s| s.parse::<f64>().ok())
                 .or_else(|| result.get("netLiquidation").and_then(|v| v.as_f64())),
-            
+
             // Parse totalProfitLoss
             unrealized_profit_loss: result
                 .get("totalProfitLoss")
                 .and_then(|v| v.as_str())
                 .and_then(|s| s.parse::<f64>().ok())
                 .or_else(|| result.get("totalProfitLoss").and_then(|v| v.as_f64())),
-            
+
             // Parse totalProfitLossRate
             unrealized_profit_loss_rate: result
                 .get("totalProfitLossRate")
                 .and_then(|v| v.as_str())
                 .and_then(|s| s.parse::<f64>().ok())
                 .or_else(|| result.get("totalProfitLossRate").and_then(|v| v.as_f64())),
-            
+
             // Extract currency
-            currency: result.get("currency").and_then(|v| v.as_str()).map(String::from),
-            
+            currency: result
+                .get("currency")
+                .and_then(|v| v.as_str())
+                .map(String::from),
+
             // Initialize other fields as None (will be populated from accountMembers)
             total_cost: None,
             account_type: None,
@@ -233,7 +255,7 @@ impl PaperWebullClient {
                 account.open_orders = Some(orders_array);
             }
         }
-        
+
         // Set account type to CASH (paper accounts are typically cash accounts)
         // The actual account type info is in the "accounts" array if needed
         account.account_type = Some("CASH".to_string());
@@ -559,7 +581,7 @@ impl PaperWebullClient {
         // For paper trading, positions are included in the account details
         // This matches the Python implementation which calls get_account()['positions']
         let account = self.get_account().await?;
-        
+
         // Return positions from account details, defaulting to empty vec if None
         Ok(account.positions.unwrap_or_default())
     }

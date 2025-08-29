@@ -1,11 +1,11 @@
+use crate::error::{Result, WebullError};
+use log::{debug, error, info, warn};
+use parking_lot::RwLock;
+use rumqttc::{AsyncClient, Event, MqttOptions, Packet, QoS};
+use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
-use parking_lot::RwLock;
-use rumqttc::{AsyncClient, MqttOptions, QoS, Event, Packet};
-use serde_json::Value;
 use tokio::time::{sleep, Duration};
-use log::{debug, error, info, warn};
-use crate::error::{Result, WebullError};
 
 /// Callback for handling price updates
 pub type PriceCallback = Arc<dyn Fn(Value, Value) + Send + Sync>;
@@ -27,7 +27,7 @@ pub struct StreamConfig {
 impl Default for StreamConfig {
     fn default() -> Self {
         Self {
-            host: "wss://wspush.webullbroker.com/mqtt".to_string(),  // Full WebSocket URL with path
+            host: "wss://wspush.webullbroker.com/mqtt".to_string(), // Full WebSocket URL with path
             port: 443,
             use_ssl: true,
             client_id: format!("rust_client_{}", uuid::Uuid::new_v4()),
@@ -81,16 +81,16 @@ impl StreamConn {
     /// Connect to the streaming service
     pub async fn connect(&mut self, access_token: &str, did: &str) -> Result<()> {
         let mut mqtt_options = MqttOptions::new(
-            did,  // Use did as client_id like Python does
+            did, // Use did as client_id like Python does
             &self.config.host,
             self.config.port,
         );
 
         mqtt_options.set_keep_alive(self.config.keep_alive);
-        
+
         // Set authentication - Python uses hardcoded test/test
         mqtt_options.set_credentials("test", "test");
-        
+
         // Enable WebSocket transport with TLS like Python uses
         use rumqttc::Transport;
         mqtt_options.set_transport(Transport::Wss(Default::default()));
@@ -176,16 +176,20 @@ impl StreamConn {
                     }
                 })
             };
-            
+
             // Subscribe to the hello message
             if let Some(ref client) = self.client {
-                client.subscribe(hello_msg.to_string(), QoS::AtMostOnce).await
+                client
+                    .subscribe(hello_msg.to_string(), QoS::AtMostOnce)
+                    .await
                     .map_err(|e| WebullError::MqttError(format!("Failed to send hello: {}", e)))?;
             }
-            
+
             Ok(())
         } else {
-            Err(WebullError::WebSocketError("Failed to connect to streaming service".to_string()))
+            Err(WebullError::WebSocketError(
+                "Failed to connect to streaming service".to_string(),
+            ))
         }
     }
 
@@ -228,7 +232,7 @@ impl StreamConn {
             if let Some(callback) = order_callback {
                 callback(topic_json, payload_json);
             }
-        } 
+        }
         // Check if it's a price message (from wspush)
         else if topic.contains("wspush") || topic.contains("ticker") {
             // Update total volume if applicable
@@ -249,12 +253,14 @@ impl StreamConn {
         if let Some(client) = &self.client {
             for topic_type in topics {
                 let topic = format!("{{\"tickerId\":\"{}\",\"type\":{}}}", ticker_id, topic_type);
-                
-                client.subscribe(&topic, QoS::AtLeastOnce).await
+
+                client
+                    .subscribe(&topic, QoS::AtLeastOnce)
+                    .await
                     .map_err(|e| WebullError::MqttError(e.to_string()))?;
-                
+
                 self.subscriptions.write().push(topic.clone());
-                
+
                 if self.config.debug {
                     debug!("Subscribed to: {}", topic);
                 }
@@ -269,12 +275,14 @@ impl StreamConn {
     pub async fn subscribe_orders(&mut self, account_id: &str) -> Result<()> {
         if let Some(client) = &self.client {
             let topic = format!("{{\"secAccountId\":\"{}\"}}", account_id);
-            
-            client.subscribe(&topic, QoS::AtLeastOnce).await
+
+            client
+                .subscribe(&topic, QoS::AtLeastOnce)
+                .await
                 .map_err(|e| WebullError::MqttError(e.to_string()))?;
-            
+
             self.subscriptions.write().push(topic.clone());
-            
+
             if self.config.debug {
                 debug!("Subscribed to orders: {}", topic);
             }
@@ -289,12 +297,14 @@ impl StreamConn {
         if let Some(client) = &self.client {
             for topic_type in topics {
                 let topic = format!("{{\"tickerId\":\"{}\",\"type\":{}}}", ticker_id, topic_type);
-                
-                client.unsubscribe(&topic).await
+
+                client
+                    .unsubscribe(&topic)
+                    .await
                     .map_err(|e| WebullError::MqttError(e.to_string()))?;
-                
+
                 self.subscriptions.write().retain(|t| t != &topic);
-                
+
                 if self.config.debug {
                     debug!("Unsubscribed from: {}", topic);
                 }
@@ -310,7 +320,9 @@ impl StreamConn {
         if let Some(client) = &self.client {
             let subscriptions = self.subscriptions.read().clone();
             for topic in subscriptions {
-                client.unsubscribe(&topic).await
+                client
+                    .unsubscribe(&topic)
+                    .await
                     .map_err(|e| WebullError::MqttError(e.to_string()))?;
             }
             self.subscriptions.write().clear();
@@ -325,7 +337,9 @@ impl StreamConn {
         if self.client.is_some() {
             self.unsubscribe_all().await?;
             if let Some(client) = self.client.take() {
-                client.disconnect().await
+                client
+                    .disconnect()
+                    .await
                     .map_err(|e| WebullError::MqttError(e.to_string()))?;
             }
             *self.is_connected.write() = false;
@@ -363,7 +377,7 @@ impl TopicTypes {
     pub const TICKER_QUOTE_TRADE_OPTIONAL: i32 = 106;
     pub const TICKER_TRADE_AND_BOOK: i32 = 107;
     pub const TICKER_FULL: i32 = 108;
-    
+
     /// Get all available topic types
     pub fn all() -> Vec<i32> {
         vec![
@@ -377,14 +391,10 @@ impl TopicTypes {
             Self::TICKER_FULL,
         ]
     }
-    
+
     /// Get basic subscription topics
     pub fn basic() -> Vec<i32> {
-        vec![
-            Self::TICKER_QUOTE,
-            Self::TICKER_TRADE,
-            Self::TICKER_BOOK,
-        ]
+        vec![Self::TICKER_QUOTE, Self::TICKER_TRADE, Self::TICKER_BOOK]
     }
 }
 
@@ -403,7 +413,7 @@ mod tests {
     fn test_topic_types() {
         let all_topics = TopicTypes::all();
         assert_eq!(all_topics.len(), 8);
-        
+
         let basic_topics = TopicTypes::basic();
         assert_eq!(basic_topics.len(), 3);
     }

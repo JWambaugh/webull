@@ -6,26 +6,31 @@
 // - Display article titles, sources, and summaries
 // Useful for sentiment analysis and market research.
 
-use webull_unofficial::{WebullClient, Result};
 use std::env;
+use webull_unofficial::{Result, WebullClient};
 
 #[tokio::main]
 async fn main() -> Result<()> {
     dotenv::dotenv().ok();
     env_logger::init();
-    
+
     let username = env::var("WEBULL_USERNAME").expect("WEBULL_USERNAME not set");
     let password = env::var("WEBULL_PASSWORD").expect("WEBULL_PASSWORD not set");
-    
+
     // Test Live Account
     let mut client = WebullClient::new_live(None).expect("Failed to create live client");
-    
-    match client.login(&username, &password, None, None, None, None).await {
+
+    match client
+        .login_with()
+        .username(&username)
+        .password(&password)
+        .await
+    {
         Ok(_) => {
             println!("✓ Logged in to live account");
-            
-            // Test getting news for PROK
-            match client.get_news("PROK", 0, 5).await {
+
+            // Test getting news for PROK using builder pattern
+            match client.get_news_with().ticker("PROK").latest(5).await {
                 Ok(news_items) => {
                     println!("\n📰 News for PROK:");
                     println!("  Total items: {}", news_items.len());
@@ -54,6 +59,6 @@ async fn main() -> Result<()> {
             println!("✗ Failed to login: {}", e);
         }
     }
-    
+
     Ok(())
 }

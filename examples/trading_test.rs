@@ -54,7 +54,9 @@ async fn main() -> Result<()> {
     };
 
     match client
-        .login(&username, &password, None, None, None, None)
+        .login_with()
+        .username(&username)
+        .password(&password)
         .await
     {
         Ok(_) => {
@@ -289,7 +291,10 @@ async fn get_historical_data_interactive(client: &WebullClient) -> Result<()> {
 
     if let Some(ticker) = tickers.first() {
         let bars = client
-            .get_bars(&ticker.ticker_id.to_string(), "d1", count, None)
+            .get_bars_with()
+            .ticker_id(&ticker.ticker_id.to_string())
+            .interval("d1")
+            .count(count)
             .await?;
 
         if bars.is_empty() {
@@ -384,20 +389,14 @@ async fn place_market_order_interactive(client: &WebullClient) -> Result<()> {
             return Ok(());
         }
 
-        let order = PlaceOrderRequest {
-            ticker_id: ticker.ticker_id,
-            action,
-            order_type: OrderType::Market,
-            time_in_force: TimeInForce::Day,
-            quantity,
-            limit_price: None,
-            stop_price: None,
-            outside_regular_trading_hour: false,
-            serial_id: None,
-            combo_type: None,
-        };
-
-        match client.place_order(&order).await {
+        match client
+            .place_market_order_with()
+            .ticker_id(ticker.ticker_id)
+            .action(action)
+            .quantity(quantity)
+            .time_in_force(TimeInForce::Day)
+            .await
+        {
             Ok(order_id) => {
                 println!("✅ Market order placed successfully!");
                 println!("   Order ID: {}", order_id);
@@ -474,20 +473,14 @@ async fn place_limit_order_interactive(client: &WebullClient) -> Result<()> {
             return Ok(());
         }
 
-        let order = PlaceOrderRequest {
-            ticker_id: ticker.ticker_id,
-            action,
-            order_type: OrderType::Limit,
-            time_in_force: TimeInForce::GoodTillCancel,
-            quantity,
-            limit_price: Some(limit_price),
-            stop_price: None,
-            outside_regular_trading_hour: false,
-            serial_id: None,
-            combo_type: None,
-        };
-
-        match client.place_order(&order).await {
+        match client
+            .place_limit_order_with(limit_price)
+            .ticker_id(ticker.ticker_id)
+            .action(action)
+            .quantity(quantity)
+            .time_in_force(TimeInForce::GoodTillCancel)
+            .await
+        {
             Ok(order_id) => {
                 println!("✅ Limit order placed successfully!");
                 println!("   Order ID: {}", order_id);
@@ -546,20 +539,14 @@ async fn place_stop_order_interactive(client: &WebullClient) -> Result<()> {
             return Ok(());
         }
 
-        let order = PlaceOrderRequest {
-            ticker_id: ticker.ticker_id,
-            action: OrderAction::Sell,
-            order_type: OrderType::Stop,
-            time_in_force: TimeInForce::GoodTillCancel,
-            quantity,
-            limit_price: None,
-            stop_price: Some(stop_price),
-            outside_regular_trading_hour: false,
-            serial_id: None,
-            combo_type: None,
-        };
-
-        match client.place_order(&order).await {
+        match client
+            .place_stop_order_with(stop_price)
+            .ticker_id(ticker.ticker_id)
+            .sell()
+            .quantity(quantity)
+            .time_in_force(TimeInForce::GoodTillCancel)
+            .await
+        {
             Ok(order_id) => {
                 println!("✅ Stop-loss order placed successfully!");
                 println!("   Order ID: {}", order_id);
@@ -941,7 +928,7 @@ async fn get_news_interactive(client: &WebullClient) -> Result<()> {
 
     println!("\n📰 Fetching news for {}...", symbol);
 
-    match client.get_news(&symbol, 0, 5).await {
+    match client.get_news_with().ticker(&symbol).latest(5).await {
         Ok(news_items) => {
             if news_items.is_empty() {
                 println!("No recent news found for {}", symbol);
@@ -1021,20 +1008,14 @@ async fn run_automated_test_suite(client: &WebullClient) -> Result<()> {
     if confirm_action("Place a test MARKET BUY order for 1 share of AAPL?") {
         if let Ok(tickers) = client.find_ticker("AAPL").await {
             if let Some(ticker) = tickers.first() {
-                let order = PlaceOrderRequest {
-                    ticker_id: ticker.ticker_id,
-                    action: OrderAction::Buy,
-                    order_type: OrderType::Market,
-                    time_in_force: TimeInForce::Day,
-                    quantity: 1.0,
-                    limit_price: None,
-                    stop_price: None,
-                    outside_regular_trading_hour: false,
-                    serial_id: None,
-                    combo_type: None,
-                };
-
-                match client.place_order(&order).await {
+                match client
+                    .place_market_order_with()
+                    .ticker_id(ticker.ticker_id)
+                    .buy()
+                    .quantity(1.0)
+                    .time_in_force(TimeInForce::Day)
+                    .await
+                {
                     Ok(order_id) => println!("  ✅ Test order placed! ID: {}", order_id),
                     Err(e) => println!("  ❌ Test order failed: {}", e),
                 }

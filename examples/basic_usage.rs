@@ -29,7 +29,7 @@ async fn main() -> Result<()> {
 
     println!("Logging in...");
 
-    // Login
+    // Login using original API (you can also use client.login_with() for builder pattern)
     match client
         .login(&username, &password, None, None, None, None)
         .await
