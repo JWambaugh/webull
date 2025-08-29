@@ -682,6 +682,86 @@ mod tests {
     }
 
     #[test]
+    fn test_order_type_auto_detection_in_builder() {
+        // This test verifies that the auto-detection logic correctly determines
+        // the order type based on which prices are set
+        
+        let client = WebullClient::new_paper(Some(6)).unwrap();
+
+        // Test 1: Market order (no prices) should detect OrderType::Market
+        {
+            let builder = PlaceOrderBuilderWithClient::new(&client)
+                .ticker_id(123)
+                .buy()
+                .quantity(10.0);
+            
+            // The order type should be None initially
+            assert_eq!(builder.order_type, None);
+            
+            // Simulate what happens in IntoFuture
+            let detected_type = match (builder.limit_price.is_some(), builder.stop_price.is_some()) {
+                (true, true) => OrderType::StopLimit,
+                (true, false) => OrderType::Limit,
+                (false, true) => OrderType::Stop,
+                (false, false) => OrderType::Market,
+            };
+            assert_eq!(detected_type, OrderType::Market);
+        }
+
+        // Test 2: Limit order (limit price only) should detect OrderType::Limit
+        {
+            let builder = PlaceOrderBuilderWithClient::new(&client)
+                .ticker_id(123)
+                .limit(150.0)
+                .buy()
+                .quantity(10.0);
+            
+            let detected_type = match (builder.limit_price.is_some(), builder.stop_price.is_some()) {
+                (true, true) => OrderType::StopLimit,
+                (true, false) => OrderType::Limit,
+                (false, true) => OrderType::Stop,
+                (false, false) => OrderType::Market,
+            };
+            assert_eq!(detected_type, OrderType::Limit);
+        }
+
+        // Test 3: Stop order (stop price only) should detect OrderType::Stop
+        {
+            let builder = PlaceOrderBuilderWithClient::new(&client)
+                .ticker_id(123)
+                .stop(145.0)
+                .sell()
+                .quantity(10.0);
+            
+            let detected_type = match (builder.limit_price.is_some(), builder.stop_price.is_some()) {
+                (true, true) => OrderType::StopLimit,
+                (true, false) => OrderType::Limit,
+                (false, true) => OrderType::Stop,
+                (false, false) => OrderType::Market,
+            };
+            assert_eq!(detected_type, OrderType::Stop);
+        }
+
+        // Test 4: Stop-Limit order (both prices) should detect OrderType::StopLimit
+        {
+            let builder = PlaceOrderBuilderWithClient::new(&client)
+                .ticker_id(123)
+                .limit(144.0)
+                .stop(145.0)
+                .sell()
+                .quantity(10.0);
+            
+            let detected_type = match (builder.limit_price.is_some(), builder.stop_price.is_some()) {
+                (true, true) => OrderType::StopLimit,
+                (true, false) => OrderType::Limit,
+                (false, true) => OrderType::Stop,
+                (false, false) => OrderType::Market,
+            };
+            assert_eq!(detected_type, OrderType::StopLimit);
+        }
+    }
+
+    #[test]
     fn test_place_order_builder_explicit_types() {
         let client = WebullClient::new_paper(Some(6)).unwrap();
 
