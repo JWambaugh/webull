@@ -1,14 +1,15 @@
 [package]
 name = "webull_unofficial"
-version = "1.0.0"
+version = "1.0.1"
 authors = ["Jordan Wambaugh"]
 edition = "2021"
 description = "The unofficial Rust interface for the WeBull API"
 license = "MIT"
-repository = "https://github.com/JWambaugh/webull-unofficial"
+repository = "https://github.com/JWambaugh/webull_unofficial"
 keywords = ["webull", "trading", "api", "finance", "stocks"]
 categories = ["api-bindings", "finance"]
 readme = "README.md"
+documentation = "https://crates.io/crates/webull_unofficial"
 
 [dependencies]
 reqwest = { version = "0.11", features = ["json", "cookies", "gzip"] }
