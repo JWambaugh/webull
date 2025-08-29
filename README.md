@@ -33,7 +33,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-webull = "1.0.0"
+webull = "1.1.0"
 ```
 
 ## Quick Start
@@ -218,7 +218,7 @@ let more_news = client.get_news_with()
 ### Bars/Candles Builder (Fluent API)
 
 ```rust
-// Get historical bars - no build() needed!
+// Get historical bars
 let bars = client.get_bars_with()
     .ticker_id("913256135")
     .interval("5m")
@@ -241,7 +241,7 @@ let options = client.get_options_with()
 ### Order Builders (Fluent API)
 
 ```rust
-// NEW: Automatic order type detection!
+// NEW: Automatic order type detection
 // The order type is automatically detected based on which parameters you set:
 
 // Market order (no prices specified)
